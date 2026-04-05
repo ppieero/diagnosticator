@@ -1,78 +1,144 @@
-import { createClient } from "@/lib/supabase/server"
-import { notFound } from "next/navigation"
+"use client"
+import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
+import { getPatientEvaluations } from "@/lib/services/evaluations"
+import type { Patient, Evaluation } from "@/types/domain"
 import { formatDate, calculateAge } from "@/lib/utils"
-import Link from "next/link"
+import { cn } from "@/lib/utils"
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
-  const { data } = await supabase.from("patients").select("full_name").eq("id", id).single()
-  return { title: data?.full_name ?? "Paciente" }
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  in_progress: { label: "En progreso", color: "bg-blue-100 text-blue-700" },
+  completed:   { label: "Completada",  color: "bg-green-100 text-green-700" },
+  cancelled:   { label: "Cancelada",   color: "bg-gray-100 text-gray-500" },
 }
 
-export default async function PatientPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
-  const { data: patient, error } = await supabase.from("patients").select("*").eq("id", id).single()
-  if (error || !patient) notFound()
-  const age = calculateAge(patient.birth_date)
-  const SEX_LABELS: Record<string, string> = { male: "Masculino", female: "Femenino", other: "Otro" }
-  const DOC_LABELS: Record<string, string> = { dni: "DNI", passport: "Pasaporte", nie: "NIE", other: "Otro" }
-  return (
-    <div className="px-4 py-5 fade-up flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <Link href="/patients" className="tap-target flex items-center justify-center rounded-xl border border-gray-200 w-10 h-10 text-gray-500 hover:bg-gray-50">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </Link>
-        <div className="flex-1">
-          <h2 className="text-xl font-semibold text-gray-900">{patient.full_name}</h2>
-          <p className="text-sm text-gray-500">{age} años · {DOC_LABELS[patient.document_type]} {patient.document_number}</p>
-        </div>
-      </div>
-      <div className="card p-4 flex flex-col gap-3">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Datos personales</p>
-        <Row label="Nombre completo" value={patient.full_name} />
-        <Row label="Fecha de nacimiento" value={formatDate(patient.birth_date) + " (" + age + " años)"} />
-        <Row label="Sexo biológico" value={SEX_LABELS[patient.biological_sex]} />
-        <Row label="Documento" value={DOC_LABELS[patient.document_type] + " " + patient.document_number} />
-      </div>
-      <div className="card p-4 flex flex-col gap-3">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Contacto</p>
-        <Row label="Teléfono" value={patient.phone || "—"} />
-        <Row label="Email" value={patient.email || "—"} />
-        <Row label="Dirección" value={patient.address || "—"} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Link href={"/patients/" + id + "/evaluations"} className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
-          <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          </div>
-          <div className="flex-1">
-            <p className="font-medium text-gray-900 text-sm">Evaluaciones</p>
-            <p className="text-xs text-gray-500">Ver y registrar evaluaciones clínicas</p>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </Link>
-        <Link href={"/patients/" + id + "/diagnoses"} className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
-          <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          </div>
-          <div className="flex-1">
-            <p className="font-medium text-gray-900 text-sm">Diagnósticos</p>
-            <p className="text-xs text-gray-500">Diagnósticos derivados de evaluaciones</p>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </Link>
-      </div>
+const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
+  initial:   { label: "Evaluación inicial", icon: "📋" },
+  session:   { label: "Sesión de seguimiento", icon: "🔄" },
+  followup:  { label: "Control", icon: "📌" },
+}
+
+export default function PatientPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const [patient, setPatient] = useState<Patient | null>(null)
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: p } = await supabase
+        .from("patients").select("*").eq("id", id).single()
+      setPatient(p as Patient)
+      const evals = await getPatientEvaluations(id)
+      setEvaluations(evals)
+      setLoading(false)
+    }
+    load()
+  }, [id])
+
+  if (loading) return (
+    <div className="px-4 py-8 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
     </div>
   )
-}
 
-function Row({ label, value }: { label: string; value: string }) {
+  if (!patient) return (
+    <div className="px-4 py-8 text-center text-gray-500">Paciente no encontrado</div>
+  )
+
+  const age = calculateAge(patient.birth_date)
+
   return (
-    <div className="flex justify-between gap-4">
-      <span className="text-sm text-gray-500 flex-shrink-0">{label}</span>
-      <span className="text-sm text-gray-900 text-right">{value}</span>
+    <div className="px-4 py-5 fade-up flex flex-col gap-4">
+      <div className="card p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-xl font-bold text-blue-700">
+              {patient.full_name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-semibold text-gray-900">{patient.full_name}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {age} años · {patient.biological_sex === "male" ? "Masculino" : patient.biological_sex === "female" ? "Femenino" : "Otro"}
+            </p>
+            <div className="flex flex-wrap gap-3 mt-2">
+              {patient.phone && (
+                <a href={`tel:${patient.phone}`} className="text-xs text-blue-600 font-medium">
+                  📞 {patient.phone}
+                </a>
+              )}
+              {patient.email && (
+                <a href={`mailto:${patient.email}`} className="text-xs text-blue-600 font-medium truncate">
+                  ✉ {patient.email}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+        {patient.notes && (
+          <p className="text-xs text-gray-500 mt-3 border-t border-gray-100 pt-3">{patient.notes}</p>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => router.push(`/patients/${id}/evaluations/new`)}
+          className="tap-target flex-1 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+        >
+          + Nueva consulta
+        </button>
+        <button
+          onClick={() => router.push(`/patients/${id}/evaluations`)}
+          className="tap-target px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Ver todas
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold text-gray-700">
+          Consultas recientes ({evaluations.length})
+        </h3>
+        {evaluations.length === 0 && (
+          <div className="card p-6 text-center">
+            <p className="text-sm text-gray-400">Sin consultas registradas</p>
+            <p className="text-xs text-gray-300 mt-1">Crea la primera consulta con el botón de arriba</p>
+          </div>
+        )}
+        {evaluations.slice(0, 5).map(ev => {
+          const status = STATUS_CONFIG[ev.status] ?? { label: ev.status, color: "bg-gray-100 text-gray-500" }
+          const type = TYPE_CONFIG[ev.encounter_type] ?? { label: ev.encounter_type, icon: "📄" }
+          return (
+            <button
+              key={ev.id}
+              onClick={() => router.push(`/patients/${id}/evaluations/${ev.id}`)}
+              className="card p-4 text-left hover:shadow-md transition-shadow w-full"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{type.icon}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{type.label}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {formatDate(ev.started_at)}
+                    </p>
+                  </div>
+                </div>
+                <span className={cn("text-xs font-medium px-2 py-1 rounded-lg flex-shrink-0", status.color)}>
+                  {status.label}
+                </span>
+              </div>
+              {ev.notes && (
+                <p className="text-xs text-gray-500 mt-2 truncate">{ev.notes}</p>
+              )}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
