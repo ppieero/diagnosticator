@@ -11,10 +11,10 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
   in_progress: { label: "En curso",    bg: "bg-amber-50",  text: "text-amber-700", border: "border-amber-300" },
   completed:   { label: "Completada",  bg: "bg-gray-50",   text: "text-gray-500",  border: "border-gray-200" },
   cancelled:   { label: "Cancelada",   bg: "bg-red-50",    text: "text-red-400",   border: "border-red-200" },
-  no_show:     { label: "No asistió",  bg: "bg-orange-50", text: "text-orange-600",border: "border-orange-200" },
+  no_show:     { label: "No asistio",  bg: "bg-orange-50", text: "text-orange-600",border: "border-orange-200" },
 }
 
-const DAYS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"]
+const DAYS_ES = ["Dom","Lun","Mar","Mie","Jue","Vie","Sab"]
 const MONTHS_ES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]
 
 function getWeekDates(baseDate: Date): Date[] {
@@ -40,7 +40,6 @@ export default function AgendaPage() {
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState<Date>(new Date())
-  const [view, setView] = useState<"week" | "day">("week")
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null)
 
   const weekDates = getWeekDates(currentDate)
@@ -50,8 +49,7 @@ export default function AgendaPage() {
     const from = weekDates[0].toISOString()
     const to = new Date(weekDates[6])
     to.setHours(23, 59, 59)
-    const to_str = to.toISOString()
-    const data = await getAppointmentsByDateRange(from, to_str)
+    const data = await getAppointmentsByDateRange(from, to.toISOString())
     setAppointments(data)
     setLoading(false)
   }, [currentDate])
@@ -70,18 +68,25 @@ export default function AgendaPage() {
     setCurrentDate(d)
   }
 
-  function goToday() { setCurrentDate(new Date()); setSelectedDay(new Date()) }
+  function goToday() {
+    setCurrentDate(new Date())
+    setSelectedDay(new Date())
+  }
 
   function getAppsForDay(date: Date): AppointmentWithRelations[] {
     const dateStr = date.toISOString().split("T")[0]
-    return appointments.filter(a => a.scheduled_at.startsWith(dateStr))
+    return appointments
+      .filter(a => a.scheduled_at.startsWith(dateStr))
       .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
   }
 
   const isToday = (date: Date) => date.toDateString() === new Date().toDateString()
   const isSelected = (date: Date) => date.toDateString() === selectedDay.toDateString()
 
-  async function handleStatusChange(id: string, status: "confirmed" | "cancelled" | "no_show" | "completed") {
+  async function handleStatusChange(
+    id: string,
+    status: "confirmed" | "cancelled" | "no_show" | "completed"
+  ) {
     await updateAppointmentStatus(id, status)
     await loadAppointments()
     setSelectedAppointment(null)
@@ -108,13 +113,17 @@ export default function AgendaPage() {
 
         <div className="flex items-center gap-2">
           <button onClick={prevWeek} className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
           </button>
           <button onClick={goToday} className="flex-1 text-center text-sm font-medium text-gray-700 hover:text-blue-600">
             {MONTHS_ES[weekDates[0].getMonth()]} {weekDates[0].getFullYear()}
           </button>
           <button onClick={nextWeek} className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </button>
         </div>
 
@@ -124,7 +133,7 @@ export default function AgendaPage() {
             return (
               <button
                 key={i}
-                onClick={() => { setSelectedDay(date); setView("day") }}
+                onClick={() => setSelectedDay(date)}
                 className={cn(
                   "flex flex-col items-center py-2 rounded-xl transition-all",
                   isSelected(date) ? "bg-blue-600" : isToday(date) ? "bg-blue-50" : "hover:bg-gray-50"
@@ -162,12 +171,12 @@ export default function AgendaPage() {
         {!loading && dayApps.length === 0 && (
           <div className="flex flex-col items-center py-16 gap-3">
             <span className="text-4xl">📅</span>
-            <p className="text-sm font-medium text-gray-500">Sin citas para este día</p>
+            <p className="text-sm font-medium text-gray-500">Sin citas para este dia</p>
             <button
               onClick={() => router.push("/agenda/nueva")}
               className="text-sm text-blue-600 font-medium"
             >
-              Agendar cita →
+              Agendar cita
             </button>
           </div>
         )}
@@ -180,10 +189,7 @@ export default function AgendaPage() {
               <button
                 key={app.id}
                 onClick={() => setSelectedAppointment(app)}
-                className={cn(
-                  "w-full text-left border rounded-2xl p-4 transition-all hover:shadow-md",
-                  st.bg, st.border
-                )}
+                className={cn("w-full text-left border rounded-2xl p-4 transition-all hover:shadow-md", st.bg, st.border)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex gap-3">
@@ -205,8 +211,10 @@ export default function AgendaPage() {
                       {st.label}
                     </span>
                     {app.specialty && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: app.specialty.color + "20", color: app.specialty.color }}>
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: app.specialty.color + "20", color: app.specialty.color }}
+                      >
                         {app.specialty.name}
                       </span>
                     )}
@@ -231,12 +239,14 @@ export default function AgendaPage() {
                 <p className="text-lg font-bold text-gray-900">{selectedAppointment.patient?.full_name}</p>
                 <p className="text-sm text-gray-500">{selectedAppointment.service?.name}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {formatTime(selectedAppointment.scheduled_at)} · {selectedAppointment.duration_minutes} min
+                  {formatTime(selectedAppointment.scheduled_at)} - {selectedAppointment.duration_minutes} min
                 </p>
               </div>
               {selectedAppointment.specialty && (
-                <span className="text-xs font-medium px-3 py-1 rounded-full"
-                  style={{ background: selectedAppointment.specialty.color + "20", color: selectedAppointment.specialty.color }}>
+                <span
+                  className="text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ background: selectedAppointment.specialty.color + "20", color: selectedAppointment.specialty.color }}
+                >
                   {selectedAppointment.specialty.name}
                 </span>
               )}
@@ -250,12 +260,10 @@ export default function AgendaPage() {
             )}
 
             {selectedAppointment.patient?.phone && (
-              
-                href={`tel:${selectedAppointment.patient.phone}`}
-                className="flex items-center gap-2 text-sm text-blue-600 font-medium"
-              >
-                📞 {selectedAppointment.patient.phone}
-              </a>
+              <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                <span>Telefono:</span>
+                <span>{selectedAppointment.patient.phone}</span>
+              </div>
             )}
 
             <div className="flex flex-col gap-2">
@@ -265,15 +273,15 @@ export default function AgendaPage() {
                   onClick={() => handleStatusChange(selectedAppointment.id, "confirmed")}
                   className="tap-target w-full rounded-xl bg-green-600 text-white text-sm font-semibold"
                 >
-                  ✓ Confirmar cita
+                  Confirmar cita
                 </button>
               )}
               {["scheduled","confirmed"].includes(selectedAppointment.status) && (
                 <button
-                  onClick={() => router.push(`/patients/${selectedAppointment.patient_id}/evaluations/new`)}
+                  onClick={() => router.push("/patients/" + selectedAppointment.patient_id + "/evaluations/new")}
                   className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold"
                 >
-                  📋 Iniciar consulta
+                  Iniciar consulta
                 </button>
               )}
               {["scheduled","confirmed"].includes(selectedAppointment.status) && (
@@ -281,7 +289,7 @@ export default function AgendaPage() {
                   onClick={() => handleStatusChange(selectedAppointment.id, "no_show")}
                   className="tap-target w-full rounded-xl border border-orange-300 text-orange-600 text-sm font-medium"
                 >
-                  No asistió
+                  No asistio
                 </button>
               )}
               {["scheduled","confirmed"].includes(selectedAppointment.status) && (
