@@ -5,6 +5,7 @@ import { Scale0To10 } from "./fields/Scale0To10"
 import { RepeatingGroup } from "./fields/RepeatingGroup"
 import { ScoredTestField } from "./fields/ScoredTestField"
 import { BodyMapField } from "./fields/BodyMapField"
+import { LabUploadField } from "./fields/LabUploadField"
 import { cn } from "@/lib/utils"
 
 interface FieldRendererProps {
@@ -219,6 +220,17 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
         />
       )
 
+    case "lab_upload":
+      return (
+        <LabUploadField
+          value={value as import("@/types/domain").LabUpload}
+          onChange={onChange}
+          formResponseId={field.config?.form_response_id as string}
+          patientId={field.config?.patient_id as string}
+          disabled={disabled}
+        />
+      )
+
     case "scored_test":
       if (!field.test_key) return <p className="text-xs text-red-500">test_key requerido</p>
       return (
@@ -277,6 +289,17 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
             <span className="text-sm text-gray-500 font-medium w-10">{field.unit}</span>
           )}
         </div>
+      )
+
+    case "lab_upload":
+      return (
+        <LabUploadField
+          value={value as import("@/types/domain").LabUpload}
+          onChange={onChange}
+          formResponseId={field.config?.form_response_id as string}
+          patientId={field.config?.patient_id as string}
+          disabled={disabled}
+        />
       )
 
     case "range_of_motion":
