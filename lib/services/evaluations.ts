@@ -35,13 +35,22 @@ export async function createEvaluation(payload: {
   const { data, error } = await supabase
     .from("evaluations")
     .insert({
-      ...payload,
+      patient_id: payload.patient_id,
+      specialty_id: payload.specialty_id,
+      professional_id: payload.professional_id,
+      performed_by: payload.professional_id,
+      encounter_type: payload.encounter_type,
+      evaluation_type_id: payload.evaluation_type_id,
+      notes: payload.chief_complaint ?? null,
       status: "in_progress",
       started_at: new Date().toISOString(),
     })
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    console.error("createEvaluation error:", JSON.stringify(error))
+    throw error
+  }
   return data as Evaluation
 }
 
@@ -49,7 +58,11 @@ export async function completeEvaluation(id: string): Promise<void> {
   const supabase = createClient()
   const { error } = await supabase
     .from("evaluations")
-    .update({ status: "completed", ended_at: new Date().toISOString() })
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      ended_at: new Date().toISOString(),
+    })
     .eq("id", id)
   if (error) throw error
 }
@@ -108,17 +121,29 @@ export async function saveFormResponse(payload: {
         computed_scores: payload.computed_scores,
         body_map_data: payload.body_map_data ?? [],
         status: payload.status,
-        ...(payload.status === "completed" ? { completed_at: new Date().toISOString() } : {}),
+        updated_at: new Date().toISOString(),
+        ...(payload.status === "completed"
+          ? { completed_at: new Date().toISOString() }
+          : {}),
       })
       .eq("id", existing.data.id)
   } else {
     await supabase
       .from("form_responses")
       .insert({
-        ...payload,
+        template_id: payload.template_id,
+        template_version: payload.template_version,
+        encounter_id: payload.encounter_id,
+        patient_id: payload.patient_id,
+        professional_id: payload.professional_id,
+        answers: payload.answers,
+        computed_scores: payload.computed_scores,
         body_map_data: payload.body_map_data ?? [],
+        status: payload.status,
         started_at: new Date().toISOString(),
-        ...(payload.status === "completed" ? { completed_at: new Date().toISOString() } : {}),
+        ...(payload.status === "completed"
+          ? { completed_at: new Date().toISOString() }
+          : {}),
       })
   }
 }
