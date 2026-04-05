@@ -3,39 +3,33 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { createAppointment, getServices, getOrCreateProfessional } from "@/lib/services/appointments"
+import { getAvailableSlots } from "@/lib/services/availability"
 import type { Patient, Specialty } from "@/types/domain"
 import { cn } from "@/lib/utils"
 
 interface Service {
-  id: string
-  name: string
-  duration_minutes: number
-  price: number
-  specialty_id: string
-  specialty?: { id: string; name: string; color: string }
+  id: string; name: string; duration_minutes: number; price: number
+  specialty_id: string; specialty?: { id: string; name: string; color: string }
 }
 
 export default function NuevaCitaPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const preselectedPatientId = searchParams.get("patient_id")
-
   const [patients, setPatients] = useState<Patient[]>([])
   const [specialties, setSpecialties] = useState<Specialty[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [userId, setUserId] = useState("")
-
-  const [selectedPatient, setSelectedPatient] = useState<string>(preselectedPatientId ?? "")
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>("")
-  const [selectedService, setSelectedService] = useState<string>("")
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  )
-  const [selectedTime, setSelectedTime] = useState<string>("09:00")
+  const [professionalId, setProfessionalId] = useState("")
+  const [selectedPatient, setSelectedPatient] = useState(searchParams.get("patient_id") ?? "")
+  const [selectedSpecialty, setSelectedSpecialty] = useState("")
+  const [selectedService, setSelectedService] = useState("")
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+  const [selectedTime, setSelectedTime] = useState("")
   const [chiefComplaint, setChiefComplaint] = useState("")
-  const [notes, setNotes] = useState("")
   const [patientSearch, setPatientSearch] = useState("")
-
+  const [availableSlots, setAvailableSlots] = useState<{ time: string; available: boolean; reason?: string }[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [noSchedule, setNoSchedule] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState(1)
@@ -44,8 +38,8 @@ export default function NuevaCitaPage() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) setUserId(user.id)
-
+      if (!user) return
+      setUserId(user.id)
       const [pRes, spRes] = await Promise.all([
         supabase.from("patients").select("*").eq("is_active", true).order("full_name"),
         supabase.from("specialties").select("*").eq("is_active", true),
@@ -64,13 +58,26 @@ export default function NuevaCitaPage() {
     })
   }, [selectedSpecialty])
 
-  const filteredPatients = patients.filter(p =>
-    p.full_name.toLowerCase().includes(patientSearch.toLowerCase())
-  )
+  useEffect(() => {
+    if (!professionalId || !selectedDate) return
+    setLoadingSlots(true)
+    setSelectedTime("")
+    setNoSchedule(false)
+    getAvailableSlots(professionalId, selectedDate).then(slots => {
+      setAvailableSlots(slots)
+      setNoSchedule(slots.length === 0)
+      setLoadingSlots(false)
+    })
+  }, [professionalId, selectedDate])
 
-  const selectedPatientObj = patients.find(p => p.id === selectedPatient)
-  const selectedServiceObj = services.find(s => s.id === selectedService)
-  const selectedSpecialtyObj = specialties.find(s => s.id === selectedSpecialty)
+  async function goToStep3() {
+    if (!selectedSpecialty || !selectedService) return
+    const supabase = createClient()
+    const { data: specs } = await supabase.from("specialties").select("id").eq("id", selectedSpecialty).single()
+    const profId = await getOrCreateProfessional(userId, specs?.id ?? selectedSpecialty)
+    setProfessionalId(profId)
+    setStep(3)
+  }
 
   async function handleSubmit() {
     if (!selectedPatient || !selectedSpecialty || !selectedService || !selectedDate || !selectedTime) {
@@ -81,7 +88,7 @@ export default function NuevaCitaPage() {
     setError(null)
     try {
       const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00`).toISOString()
-      const professionalId = await getOrCreateProfessional(userId, selectedSpecialty)
+      const selectedServiceObj = services.find(s => s.id === selectedService)
       await createAppointment({
         patient_id: selectedPatient,
         professional_id: professionalId,
@@ -90,31 +97,28 @@ export default function NuevaCitaPage() {
         scheduled_at: scheduledAt,
         duration_minutes: selectedServiceObj?.duration_minutes ?? 60,
         chief_complaint: chiefComplaint || undefined,
-        notes: notes || undefined,
         created_by: userId,
       })
       router.push("/agenda")
-    } catch (err) {
-      console.error(err)
+    } catch {
       setError("Error al crear la cita. Intente nuevamente.")
     } finally {
       setLoading(false)
     }
   }
 
-  const TIME_SLOTS = Array.from({ length: 26 }, (_, i) => {
-    const h = Math.floor(i / 2) + 8
-    const m = i % 2 === 0 ? "00" : "30"
-    return `${String(h).padStart(2, "0")}:${m}`
-  })
+  const filteredPatients = patients.filter(p =>
+    p.full_name.toLowerCase().includes(patientSearch.toLowerCase())
+  )
+  const selectedPatientObj = patients.find(p => p.id === selectedPatient)
+  const selectedServiceObj = services.find(s => s.id === selectedService)
+  const selectedSpecialtyObj = specialties.find(s => s.id === selectedSpecialty)
 
   return (
     <div className="px-4 py-5 fade-up flex flex-col gap-5">
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-        >
+        <button onClick={() => step > 1 ? setStep(s => s - 1) : router.back()}
+          className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -124,53 +128,32 @@ export default function NuevaCitaPage() {
 
       <div className="flex gap-2">
         {[1,2,3].map(s => (
-          <div key={s} className={cn(
-            "flex-1 h-1.5 rounded-full transition-colors",
-            step >= s ? "bg-blue-600" : "bg-gray-200"
-          )} />
+          <div key={s} className={cn("flex-1 h-1.5 rounded-full transition-colors", step >= s ? "bg-blue-600" : "bg-gray-200")} />
         ))}
       </div>
 
       {step === 1 && (
         <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-sm font-semibold text-gray-700 mb-3">Seleccionar paciente</p>
-            <input
-              type="text"
-              placeholder="Buscar paciente..."
-              value={patientSearch}
-              onChange={e => setPatientSearch(e.target.value)}
-              className="input-base mb-3"
-            />
-            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-              {filteredPatients.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedPatient(p.id)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
-                    selectedPatient === p.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                  )}
-                >
-                  <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-gray-600">{p.full_name.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <p className={cn("text-sm font-medium", selectedPatient === p.id ? "text-blue-900" : "text-gray-800")}>
-                      {p.full_name}
-                    </p>
-                    {p.phone && <p className="text-xs text-gray-400">{p.phone}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
+          <p className="text-sm font-semibold text-gray-700">Seleccionar paciente</p>
+          <input type="text" placeholder="Buscar..." value={patientSearch}
+            onChange={e => setPatientSearch(e.target.value)} className="input-base" />
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+            {filteredPatients.map(p => (
+              <button key={p.id} type="button" onClick={() => setSelectedPatient(p.id)}
+                className={cn("flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
+                  selectedPatient === p.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
+                <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-gray-600">{p.full_name.charAt(0)}</span>
+                </div>
+                <div>
+                  <p className={cn("text-sm font-medium", selectedPatient === p.id ? "text-blue-900" : "text-gray-800")}>{p.full_name}</p>
+                  {p.phone && <p className="text-xs text-gray-400">{p.phone}</p>}
+                </div>
+              </button>
+            ))}
           </div>
-          <button
-            onClick={() => selectedPatient && setStep(2)}
-            disabled={!selectedPatient}
-            className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50"
-          >
+          <button onClick={() => selectedPatient && setStep(2)} disabled={!selectedPatient}
+            className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
             Siguiente →
           </button>
         </div>
@@ -184,68 +167,39 @@ export default function NuevaCitaPage() {
             </div>
             <p className="text-sm font-semibold text-gray-800">{selectedPatientObj?.full_name}</p>
           </div>
-
-          <div>
-            <p className="text-sm font-semibold text-gray-700 mb-2">Especialidad</p>
-            <div className="flex flex-col gap-2">
-              {specialties.map(sp => (
-                <button
-                  key={sp.id}
-                  type="button"
-                  onClick={() => setSelectedSpecialty(sp.id)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
-                    selectedSpecialty === sp.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                  )}
-                >
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: sp.color }} />
-                  <span className={cn("text-sm font-medium", selectedSpecialty === sp.id ? "text-blue-900" : "text-gray-700")}>
-                    {sp.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+          <p className="text-sm font-semibold text-gray-700">Especialidad</p>
+          <div className="flex flex-col gap-2">
+            {specialties.map(sp => (
+              <button key={sp.id} type="button" onClick={() => setSelectedSpecialty(sp.id)}
+                className={cn("flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
+                  selectedSpecialty === sp.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
+                <div className="w-3 h-3 rounded-full" style={{ background: sp.color }} />
+                <span className={cn("text-sm font-medium", selectedSpecialty === sp.id ? "text-blue-900" : "text-gray-700")}>{sp.name}</span>
+              </button>
+            ))}
           </div>
-
           {services.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">Servicio</p>
+            <>
+              <p className="text-sm font-semibold text-gray-700">Servicio</p>
               <div className="flex flex-col gap-2">
                 {services.map(sv => (
-                  <button
-                    key={sv.id}
-                    type="button"
-                    onClick={() => setSelectedService(sv.id)}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left",
-                      selectedService === sv.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                    )}
-                  >
+                  <button key={sv.id} type="button" onClick={() => setSelectedService(sv.id)}
+                    className={cn("flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all",
+                      selectedService === sv.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
                     <div>
-                      <p className={cn("text-sm font-medium", selectedService === sv.id ? "text-blue-900" : "text-gray-800")}>
-                        {sv.name}
-                      </p>
+                      <p className={cn("text-sm font-medium", selectedService === sv.id ? "text-blue-900" : "text-gray-800")}>{sv.name}</p>
                       <p className="text-xs text-gray-400">{sv.duration_minutes} min</p>
                     </div>
                     <p className="text-sm font-semibold text-gray-700">€{sv.price}</p>
                   </button>
                 ))}
               </div>
-            </div>
+            </>
           )}
-
-          <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="tap-target px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-600">
-              ← Atrás
-            </button>
-            <button
-              onClick={() => selectedSpecialty && selectedService && setStep(3)}
-              disabled={!selectedSpecialty || !selectedService}
-              className="tap-target flex-1 rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50"
-            >
-              Siguiente →
-            </button>
-          </div>
+          <button onClick={goToStep3} disabled={!selectedSpecialty || !selectedService}
+            className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
+            Siguiente →
+          </button>
         </div>
       )}
 
@@ -266,45 +220,55 @@ export default function NuevaCitaPage() {
 
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Fecha</label>
-            <input
-              type="date"
-              value={selectedDate}
+            <input type="date" value={selectedDate}
               min={new Date().toISOString().split("T")[0]}
               onChange={e => setSelectedDate(e.target.value)}
-              className="input-base"
-            />
+              className="input-base" />
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Hora</label>
-            <div className="grid grid-cols-4 gap-2">
-              {TIME_SLOTS.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setSelectedTime(t)}
-                  className={cn(
-                    "py-2.5 rounded-xl text-sm font-medium border-2 transition-all",
-                    selectedTime === t
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-300"
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            <label className="text-sm font-medium text-gray-700 block mb-2">Hora disponible</label>
+            {loadingSlots && (
+              <div className="flex items-center gap-2 py-4">
+                <div className="w-5 h-5 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+                <p className="text-sm text-gray-400">Cargando disponibilidad...</p>
+              </div>
+            )}
+            {!loadingSlots && noSchedule && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">Sin horario configurado</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  El profesional no tiene horario para este día.{" "}
+                  <button onClick={() => router.push("/ajustes")} className="underline font-medium">
+                    Configurar horario →
+                  </button>
+                </p>
+              </div>
+            )}
+            {!loadingSlots && availableSlots.length > 0 && (
+              <div className="grid grid-cols-4 gap-2">
+                {availableSlots.map(slot => (
+                  <button key={slot.time} type="button"
+                    disabled={!slot.available}
+                    onClick={() => slot.available && setSelectedTime(slot.time)}
+                    className={cn(
+                      "py-2.5 rounded-xl text-sm font-medium border-2 transition-all",
+                      !slot.available ? "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed line-through" :
+                      selectedTime === slot.time ? "bg-blue-600 text-white border-blue-600" :
+                      "bg-white text-gray-700 border-gray-200 hover:border-blue-300"
+                    )}
+                  >
+                    {slot.time}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Motivo (opcional)</label>
-            <textarea
-              value={chiefComplaint}
-              onChange={e => setChiefComplaint(e.target.value)}
-              placeholder="Motivo de la consulta..."
-              rows={2}
-              className="input-base resize-none"
-            />
+            <textarea value={chiefComplaint} onChange={e => setChiefComplaint(e.target.value)}
+              placeholder="Motivo de la consulta..." rows={2} className="input-base resize-none" />
           </div>
 
           {error && (
@@ -313,18 +277,10 @@ export default function NuevaCitaPage() {
             </div>
           )}
 
-          <div className="flex gap-2">
-            <button onClick={() => setStep(2)} className="tap-target px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-600">
-              ← Atrás
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="tap-target flex-1 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50"
-            >
-              {loading ? "Guardando..." : "✓ Confirmar cita"}
-            </button>
-          </div>
+          <button onClick={handleSubmit} disabled={loading || !selectedTime || noSchedule}
+            className="tap-target w-full rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
+            {loading ? "Guardando..." : "Confirmar cita"}
+          </button>
         </div>
       )}
     </div>
