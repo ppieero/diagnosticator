@@ -20,6 +20,34 @@ export interface AppointmentWithRelations {
   service?: { id: string; name: string; duration_minutes: number; price: number }
 }
 
+export async function getProfessionalId(userId: string): Promise<string | null> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from("professionals")
+    .select("id")
+    .eq("user_id", userId)
+    .single()
+  return data?.id ?? null
+}
+
+export async function getOrCreateProfessional(userId: string, specialtyId: string): Promise<string> {
+  const supabase = createClient()
+  const { data: existing } = await supabase
+    .from("professionals")
+    .select("id")
+    .eq("user_id", userId)
+    .single()
+  if (existing?.id) return existing.id
+
+  const { data: created, error } = await supabase
+    .from("professionals")
+    .insert({ user_id: userId, specialty_id: specialtyId, is_active: true })
+    .select("id")
+    .single()
+  if (error) throw error
+  return created.id
+}
+
 export async function getAppointmentsByDateRange(
   from: string,
   to: string
@@ -27,12 +55,7 @@ export async function getAppointmentsByDateRange(
   const supabase = createClient()
   const { data, error } = await supabase
     .from("appointments")
-    .select(`
-      *,
-      patient:patients(id, full_name, phone),
-      specialty:specialties(id, name, color),
-      service:services(id, name, duration_minutes, price)
-    `)
+    .select("*, patient:patients(id, full_name, phone), specialty:specialties(id, name, color), service:services(id, name, duration_minutes, price)")
     .gte("scheduled_at", from)
     .lte("scheduled_at", to)
     .order("scheduled_at", { ascending: true })
@@ -44,12 +67,7 @@ export async function getAppointment(id: string): Promise<AppointmentWithRelatio
   const supabase = createClient()
   const { data, error } = await supabase
     .from("appointments")
-    .select(`
-      *,
-      patient:patients(id, full_name, phone),
-      specialty:specialties(id, name, color),
-      service:services(id, name, duration_minutes, price)
-    `)
+    .select("*, patient:patients(id, full_name, phone), specialty:specialties(id, name, color), service:services(id, name, duration_minutes, price)")
     .eq("id", id)
     .single()
   if (error) return null
@@ -71,12 +89,7 @@ export async function createAppointment(payload: {
   const { data, error } = await supabase
     .from("appointments")
     .insert({ ...payload, status: "scheduled" })
-    .select(`
-      *,
-      patient:patients(id, full_name, phone),
-      specialty:specialties(id, name, color),
-      service:services(id, name, duration_minutes, price)
-    `)
+    .select("*, patient:patients(id, full_name, phone), specialty:specialties(id, name, color), service:services(id, name, duration_minutes, price)")
     .single()
   if (error) {
     console.error("createAppointment error:", JSON.stringify(error))

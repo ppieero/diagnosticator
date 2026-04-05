@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { createAppointment, getServices } from "@/lib/services/appointments"
+import { createAppointment, getServices, getOrCreateProfessional } from "@/lib/services/appointments"
 import type { Patient, Specialty } from "@/types/domain"
 import { cn } from "@/lib/utils"
 
@@ -81,9 +81,10 @@ export default function NuevaCitaPage() {
     setError(null)
     try {
       const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00`).toISOString()
+      const professionalId = await getOrCreateProfessional(userId, selectedSpecialty)
       await createAppointment({
         patient_id: selectedPatient,
-        professional_id: userId,
+        professional_id: professionalId,
         specialty_id: selectedSpecialty,
         service_id: selectedService,
         scheduled_at: scheduledAt,
