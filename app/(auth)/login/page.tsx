@@ -22,7 +22,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    router.push("/patients")
+    router.push("/")
   }
 
   return (
