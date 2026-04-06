@@ -71,16 +71,12 @@ export async function startEncounter(payload: {
 
 export async function getEncounter(id: string): Promise<Encounter | null> {
   const supabase = createClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("evaluations")
-    .select(`
-      *,
-      patient:patients(id, full_name),
-      professional:professionals(id, profile:profiles(full_name)),
-      appointment:appointments(id, scheduled_at, service:services(id, name, specialty_id))
-    `)
+    .select("*, patient:patients(id, full_name), professional:professionals(id, profile:profiles(full_name)), appointment:appointments(id, scheduled_at, service:services(id, name, specialty_id))")
     .eq("id", id)
     .single()
+  if (error) { console.error("getEncounter error:", JSON.stringify(error)); return null }
   return data as unknown as Encounter | null
 }
 
