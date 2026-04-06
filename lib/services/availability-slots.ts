@@ -6,11 +6,6 @@ export interface TimeSlot {
   professionals?: { id: string; full_name: string; specialty: string }[]
 }
 
-export interface DayAvailability {
-  date: string
-  slots: TimeSlot[]
-}
-
 function generateSlots(startTime: string, endTime: string, slotDuration: number): string[] {
   const slots: string[] = []
   const [startH, startM] = startTime.split(":").map(Number)
@@ -26,30 +21,38 @@ function generateSlots(startTime: string, endTime: string, slotDuration: number)
   return slots
 }
 
-const DAY_NAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]
+function getDayOfWeek(date: string): number {
+  const d = new Date(date + "T12:00:00")
+  const jsDay = d.getDay()
+  return jsDay === 0 ? 7 : jsDay
+}
 
 export async function getSlotsForProfessional(
   professionalId: string,
   date: string
 ): Promise<string[]> {
   const supabase = createClient()
-  const dayName = DAY_NAMES[new Date(date + "T12:00:00").getDay()]
+  const dayNum = getDayOfWeek(date)
 
   const { data: avail } = await supabase
     .from("professional_availability")
-    .select("start_time, end_time, slot_duration")
+    .select("start_time, end_time, slot_duration_minutes")
     .eq("professional_id", professionalId)
-    .eq("day_of_week", dayName)
-    .eq("is_available", true)
+    .eq("day_of_week", dayNum)
+    .eq("is_active", true)
     .single()
 
   if (!avail) return []
 
-  const allSlots = generateSlots(avail.start_time, avail.end_time, avail.slot_duration ?? 60)
+  const allSlots = generateSlots(
+    avail.start_time.slice(0, 5),
+    avail.end_time.slice(0, 5),
+    avail.slot_duration_minutes ?? 60
+  )
 
   const { data: appts } = await supabase
     .from("appointments")
-    .select("scheduled_at, duration_minutes")
+    .select("scheduled_at")
     .eq("professional_id", professionalId)
     .gte("scheduled_at", `${date}T00:00:00`)
     .lte("scheduled_at", `${date}T23:59:59`)
@@ -64,20 +67,20 @@ export async function getSlotsForProfessional(
 
 export async function getGeneralAvailability(date: string): Promise<TimeSlot[]> {
   const supabase = createClient()
-  const dayName = DAY_NAMES[new Date(date + "T12:00:00").getDay()]
+  const dayNum = getDayOfWeek(date)
 
   const { data: profs } = await supabase
     .from("professionals")
-    .select("id, slot_duration, profile:profiles(full_name), specialty:specialties(name)")
+    .select("id, profile:profiles(full_name), specialty:specialties(name)")
     .eq("is_active", true)
 
   if (!profs || profs.length === 0) return []
 
   const { data: availabilities } = await supabase
     .from("professional_availability")
-    .select("professional_id, start_time, end_time, slot_duration")
-    .eq("day_of_week", dayName)
-    .eq("is_available", true)
+    .select("professional_id, start_time, end_time, slot_duration_minutes")
+    .eq("day_of_week", dayNum)
+    .eq("is_active", true)
     .in("professional_id", profs.map(p => p.id))
 
   if (!availabilities || availabilities.length === 0) return []
@@ -105,7 +108,11 @@ export async function getGeneralAvailability(date: string): Promise<TimeSlot[]> 
       full_name: (prof.profile as { full_name: string })?.full_name ?? "",
       specialty: (prof.specialty as { name: string })?.name ?? "",
     }
-    const slots = generateSlots(av.start_time, av.end_time, av.slot_duration ?? 60)
+    const slots = generateSlots(
+      av.start_time.slice(0, 5),
+      av.end_time.slice(0, 5),
+      av.slot_duration_minutes ?? 60
+    )
     const booked = bookedByProf.get(av.professional_id) ?? new Set()
     for (const slot of slots) {
       if (!booked.has(slot)) {
