@@ -41,6 +41,9 @@ export default function PatientPaquetesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [patientName, setPatientName] = useState("")
 
+  const [assignType, setAssignType] = useState<"package" | "service">("package")
+  const [availableServices, setAvailableServices] = useState<{ id: string; name: string; price: number; specialty?: { name: string } }[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState("")
   const [selectedPackageId, setSelectedPackageId] = useState("")
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("")
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("full")
@@ -70,6 +73,13 @@ export default function PatientPaquetesPage() {
     }))
     setProfessionals(profs)
 
+    const { data: svsData } = await supabase
+      .from("services")
+      .select("id, name, price, specialty:specialties(name)")
+      .eq("is_active", true)
+      .order("name")
+    setAvailableServices((svsData ?? []) as unknown as typeof availableServices)
+
     const { data: pkgItems } = await supabase
       .from("packages")
       .select("id, name, price, description, items:package_items(quantity)")
@@ -93,7 +103,14 @@ export default function PatientPaquetesPage() {
 
   function handleSelectPackage(pkg: CatalogPackage) {
     setSelectedPackageId(pkg.id)
+    setSelectedServiceId("")
     setPricePaid(String(pkg.price))
+  }
+
+  function handleSelectService(sv: { id: string; name: string; price: number }) {
+    setSelectedServiceId(sv.id)
+    setSelectedPackageId("")
+    setPricePaid(String(sv.price))
   }
 
   async function handleAssign() {
@@ -102,14 +119,16 @@ export default function PatientPaquetesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const pkg = catalog.find(p => p.id === selectedPackageId)
-    if (!pkg) return
+    const sv = availableServices.find(s => s.id === selectedServiceId)
+    if (!pkg && !sv) return
     setSaving(true)
     try {
       await assignPackage({
         patient_id: patientId,
-        package_id: selectedPackageId,
+        package_id: pkg ? selectedPackageId : undefined,
+        service_id: sv ? selectedServiceId : undefined,
         professional_id: selectedProfessionalId || undefined,
-        total_sessions: pkg.total_sessions,
+        total_sessions: pkg ? pkg.total_sessions : 1,
         payment_mode: paymentMode,
         price_paid: pricePaid ? parseFloat(pricePaid) : undefined,
         expires_at: expiresAt || undefined,
@@ -181,9 +200,35 @@ export default function PatientPaquetesPage() {
 
       {showForm && (
         <div className="card p-4 flex flex-col gap-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Seleccionar paquete del catalogo</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo de asignacion</p>
 
-          {catalog.length === 0 ? (
+          <div className="flex gap-2">
+            {(["package","service"] as const).map(t => (
+              <button key={t} type="button" onClick={() => { setAssignType(t); setSelectedPackageId(""); setSelectedServiceId(""); setPricePaid("") }}
+                className={cn("flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-all",
+                  assignType === t ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300")}>
+                {t === "package" ? "Paquete del catalogo" : "Servicio individual"}
+              </button>
+            ))}
+          </div>
+
+          {assignType === "service" && (
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              {availableServices.map(sv => (
+                <button key={sv.id} type="button" onClick={() => handleSelectService(sv)}
+                  className={cn("flex items-center justify-between px-4 py-2.5 rounded-xl border-2 transition-all text-left",
+                    selectedServiceId === sv.id ? "border-purple-600 bg-purple-50" : "border-gray-200 hover:border-gray-300")}>
+                  <div>
+                    <p className={cn("text-sm font-semibold", selectedServiceId === sv.id ? "text-purple-900" : "text-gray-800")}>{sv.name}</p>
+                    <p className="text-xs text-gray-400">{(sv.specialty as { name: string })?.name} · 1 sesion</p>
+                  </div>
+                  <span className="text-sm font-bold text-purple-700 ml-2">€{Number(sv.price).toFixed(0)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {assignType === "package" && catalog.length === 0 ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <p className="text-xs text-amber-800">No hay paquetes en el catalogo. Crea uno en Paquetes primero.</p>
               <button onClick={() => router.push("/paquetes/nuevo")} className="text-xs text-amber-700 font-medium underline mt-1">
@@ -213,7 +258,7 @@ export default function PatientPaquetesPage() {
             </div>
           )}
 
-          {selectedPackageId && (
+          {(selectedPackageId || selectedServiceId) && (
             <>
               <div>
                 <label className="text-xs text-gray-500 font-medium block mb-2">Profesional asignado (opcional)</label>
