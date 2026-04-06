@@ -45,6 +45,7 @@ export default function PatientPaquetesPage() {
   const [availableServices, setAvailableServices] = useState<{ id: string; name: string; price: number; specialty?: { name: string } }[]>([])
   const [selectedServiceId, setSelectedServiceId] = useState("")
   const [selectedPackageId, setSelectedPackageId] = useState("")
+  const [sessionDate, setSessionDate] = useState("")
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("")
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("full")
   const [pricePaid, setPricePaid] = useState("")
@@ -77,6 +78,7 @@ export default function PatientPaquetesPage() {
       .from("services")
       .select("id, name, price, specialty:specialties(name)")
       .eq("is_active", true)
+      .eq("session_count", 1)
       .order("name")
     setAvailableServices((svsData ?? []) as unknown as typeof availableServices)
 
@@ -142,6 +144,7 @@ export default function PatientPaquetesPage() {
       setPricePaid("")
       setExpiresAt("")
       setNotes("")
+      setSessionDate("")
       await load()
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string; details?: string }
@@ -204,7 +207,7 @@ export default function PatientPaquetesPage() {
 
           <div className="flex gap-2">
             {(["package","service"] as const).map(t => (
-              <button key={t} type="button" onClick={() => { setAssignType(t); setSelectedPackageId(""); setSelectedServiceId(""); setPricePaid("") }}
+              <button key={t} type="button" onClick={() => { setAssignType(t); setSelectedPackageId(""); setSelectedServiceId(""); setPricePaid(""); setSessionDate("") }}
                 className={cn("flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-all",
                   assignType === t ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300")}>
                 {t === "package" ? "Paquete del catalogo" : "Servicio individual"}
@@ -225,6 +228,23 @@ export default function PatientPaquetesPage() {
                   <span className="text-sm font-bold text-purple-700 ml-2">€{Number(sv.price).toFixed(0)}</span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {assignType === "service" && selectedServiceId && (
+            <div>
+              <label className="text-xs text-gray-500 font-medium block mb-1">
+                Fecha de la sesion (opcional — agendara automaticamente)
+              </label>
+              <input type="datetime-local" value={sessionDate}
+                onChange={e => setSessionDate(e.target.value)}
+                min={new Date().toISOString().slice(0,16)}
+                className="input-base" />
+              {sessionDate && (
+                <p className="text-xs text-green-600 mt-1">
+                  La sesion quedara agendada para {new Date(sessionDate).toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "long" })} a las {new Date(sessionDate).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
             </div>
           )}
 
