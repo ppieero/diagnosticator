@@ -104,6 +104,12 @@ export default function PatientPage() {
       >
         Paquetes y sesiones
       </button>
+      <button
+        onClick={() => router.push(`/patients/${id}/consultas`)}
+        className="tap-target w-full rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+      >
+        Historial de consultas
+      </button>
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold text-gray-700">
