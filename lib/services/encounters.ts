@@ -38,16 +38,23 @@ export async function startEncounter(payload: {
   encounter_type: string
 }): Promise<string> {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const { data: prev } = await supabase
     .from("evaluations")
     .select("id")
     .eq("patient_id", payload.patient_id)
     .eq("specialty_id", payload.specialty_id)
   const sessionNumber = (prev?.length ?? 0) + 1
+  const isFirst = sessionNumber === 1
+  const evalTypeId = isFirst
+    ? `initial_${payload.specialty_id}`
+    : `followup_${payload.specialty_id}`
   const { data, error } = await supabase
     .from("evaluations")
     .insert({
       ...payload,
+      evaluation_type_id: evalTypeId,
+      performed_by: user?.id ?? payload.professional_id,
       status: "in_progress",
       session_number: sessionNumber,
       started_at: new Date().toISOString(),
