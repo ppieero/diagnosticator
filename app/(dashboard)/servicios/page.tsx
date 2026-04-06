@@ -25,9 +25,9 @@ export default function ServiciosPage() {
     load()
   }, [])
 
-  const filtered = filterSpecialty
+  const filtered = (filterSpecialty
     ? services.filter(s => s.specialty_id === filterSpecialty)
-    : services
+    : services).filter(s => s.is_active)
 
   const grouped = filtered.reduce<Record<string, Service[]>>((acc, s) => {
     const key = (s.specialty as { name: string })?.name ?? "Sin especialidad"
