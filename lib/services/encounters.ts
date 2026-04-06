@@ -73,7 +73,7 @@ export async function getEncounter(id: string): Promise<Encounter | null> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("evaluations")
-    .select("*, patient:patients(id, full_name), professional:professionals(id, profile:profiles(full_name)), appointment:appointments(id, scheduled_at, service:services(id, name, specialty_id))")
+    .select("*, patient:patients(id, full_name), performer:profiles!performed_by(id, full_name), appointment:appointments(id, scheduled_at, service:services(id, name, specialty_id))")
     .eq("id", id)
     .single()
   if (error) { console.error("getEncounter error:", JSON.stringify(error)); return null }
@@ -142,11 +142,7 @@ export async function getPatientEncounters(patientId: string): Promise<Encounter
   const supabase = createClient()
   const { data } = await supabase
     .from("evaluations")
-    .select(`
-      *,
-      professional:professionals(id, profile:profiles(full_name)),
-      appointment:appointments(id, scheduled_at, service:services(id, name))
-    `)
+    .select("*, performer:profiles!performed_by(id, full_name), appointment:appointments(id, scheduled_at, service:services(id, name))")
     .eq("patient_id", patientId)
     .order("started_at", { ascending: false })
   return (data ?? []) as unknown as Encounter[]
