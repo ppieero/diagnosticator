@@ -248,7 +248,7 @@ export default function PatientPaquetesPage() {
             </div>
           )}
 
-          {assignType === "package" && catalog.length === 0 ? (
+          {assignType === "package" && (catalog.length === 0 ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <p className="text-xs text-amber-800">No hay paquetes en el catalogo. Crea uno en Paquetes primero.</p>
               <button onClick={() => router.push("/paquetes/nuevo")} className="text-xs text-amber-700 font-medium underline mt-1">
