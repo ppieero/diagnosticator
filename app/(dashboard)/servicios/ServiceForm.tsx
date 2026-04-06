@@ -3,7 +3,9 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { createService, updateService } from "@/lib/services/services"
+import { getTemplatesForSpecialty, assignTemplatesToService } from "@/lib/services/form-templates"
 import type { Service } from "@/lib/services/services"
+import type { FormTemplate } from "@/lib/services/form-templates"
 import { cn } from "@/lib/utils"
 
 const DURATIONS = [15,20,30,45,60,75,90,120]
@@ -15,7 +17,8 @@ interface Props { service?: Service }
 export default function ServiceForm({ service }: Props) {
   const router = useRouter()
   const [specialties, setSpecialties] = useState<{ id: string; name: string; color: string }[]>([])
-  const [templates, setTemplates] = useState<{ id: string; name: string; specialty_id: string }[]>([])
+  const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([])
+  const [selectedTemplates, setSelectedTemplates] = useState<{ template_id: string; is_default: boolean; sort_order: number }[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,34 +30,51 @@ export default function ServiceForm({ service }: Props) {
   const [bufferMinutes, setBufferMinutes] = useState(service?.buffer_minutes ?? 0)
   const [color, setColor] = useState(service?.color ?? "")
   const [requiresIntake, setRequiresIntake] = useState(service?.requires_intake ?? false)
-  const [formTemplateId, setFormTemplateId] = useState(service?.form_template_id ?? "")
   const [isActive, setIsActive] = useState(service?.is_active ?? true)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const [spRes, tRes] = await Promise.all([
-        supabase.from("specialties").select("id, name, color").eq("is_active", true),
-        supabase.from("specialty_form_templates").select("id, name, specialty_id").eq("is_active", true),
-      ])
-      setSpecialties(spRes.data ?? [])
-      setTemplates(tRes.data ?? [])
-      if (!service && spRes.data?.[0]) setSpecialtyId(spRes.data[0].id)
+      const { data } = await supabase.from("specialties").select("id, name, color").eq("is_active", true)
+      setSpecialties(data ?? [])
+      if (!service && data?.[0]) setSpecialtyId(data[0].id)
     }
     load()
   }, [service])
 
-  const filteredTemplates = templates.filter(t => !specialtyId || t.specialty_id === specialtyId)
+  useEffect(() => {
+    if (!specialtyId) return
+    getTemplatesForSpecialty(specialtyId).then(setAvailableTemplates)
+  }, [specialtyId])
+
+  useEffect(() => {
+    if (!service?.id) return
+    const supabase = createClient()
+    supabase.from("service_form_templates")
+      .select("template_id, is_default, sort_order")
+      .eq("service_id", service.id)
+      .order("sort_order")
+      .then(({ data }) => setSelectedTemplates(data ?? []))
+  }, [service?.id])
+
+  function toggleTemplate(tmplId: string) {
+    setSelectedTemplates(prev => {
+      const exists = prev.find(t => t.template_id === tmplId)
+      if (exists) {
+        const next = prev.filter(t => t.template_id !== tmplId)
+        return next.map((t, i) => ({ ...t, sort_order: i }))
+      }
+      return [...prev, { template_id: tmplId, is_default: prev.length === 0, sort_order: prev.length }]
+    })
+  }
+
+  function setDefault(tmplId: string) {
+    setSelectedTemplates(prev => prev.map(t => ({ ...t, is_default: t.template_id === tmplId })))
+  }
 
   async function handleSave() {
-    if (!name.trim() || !specialtyId) {
-      setError("Nombre y especialidad son obligatorios")
-      return
-    }
-    if (!price || parseFloat(price) <= 0) {
-      setError("El precio debe ser mayor a 0")
-      return
-    }
+    if (!name.trim() || !specialtyId) { setError("Nombre y especialidad son obligatorios"); return }
+    if (!price || parseFloat(price) <= 0) { setError("El precio debe ser mayor a 0"); return }
     setSaving(true)
     setError(null)
     try {
@@ -68,22 +88,28 @@ export default function ServiceForm({ service }: Props) {
         buffer_minutes: bufferMinutes,
         color: color || undefined,
         requires_intake: requiresIntake,
-        form_template_id: requiresIntake && formTemplateId ? formTemplateId : undefined,
         is_active: isActive,
       }
+      let serviceId = service?.id
       if (service) {
         await updateService(service.id, payload)
-        router.push("/servicios")
       } else {
-        await createService(payload as Parameters<typeof createService>[0])
-        router.push("/servicios")
+        serviceId = await createService(payload as Parameters<typeof createService>[0])
       }
+      if (serviceId) {
+        await assignTemplatesToService(serviceId, selectedTemplates)
+      }
+      router.push("/servicios")
     } catch (err) {
       console.error(err)
       setError("Error al guardar el servicio")
     } finally {
       setSaving(false)
     }
+  }
+
+  const FORM_TYPE_LABELS: Record<string, string> = {
+    initial: "Inicial", followup: "Seguimiento", discharge: "Alta", screening: "Screening",
   }
 
   return (
@@ -105,12 +131,11 @@ export default function ServiceForm({ service }: Props) {
           <div className="flex flex-col gap-2">
             {specialties.map(sp => (
               <button key={sp.id} type="button"
-                onClick={() => { setSpecialtyId(sp.id); setFormTemplateId("") }}
+                onClick={() => { setSpecialtyId(sp.id); setSelectedTemplates([]) }}
                 className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all text-left",
                   specialtyId === sp.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
                 <div className="w-3 h-3 rounded-full" style={{ background: sp.color }} />
-                <span className={cn("text-sm font-medium",
-                  specialtyId === sp.id ? "text-blue-900" : "text-gray-700")}>
+                <span className={cn("text-sm font-medium", specialtyId === sp.id ? "text-blue-900" : "text-gray-700")}>
                   {sp.name}
                 </span>
               </button>
@@ -127,9 +152,7 @@ export default function ServiceForm({ service }: Props) {
             {DURATIONS.map(d => (
               <button key={d} type="button" onClick={() => setDurationMinutes(d)}
                 className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all",
-                  durationMinutes === d
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300")}>
+                  durationMinutes === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300")}>
                 {d} min
               </button>
             ))}
@@ -141,9 +164,7 @@ export default function ServiceForm({ service }: Props) {
             {BUFFERS.map(b => (
               <button key={b} type="button" onClick={() => setBufferMinutes(b)}
                 className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all",
-                  bufferMinutes === b
-                    ? "bg-gray-700 text-white border-gray-700"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300")}>
+                  bufferMinutes === b ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300")}>
                 {b === 0 ? "Sin buffer" : `${b} min`}
               </button>
             ))}
@@ -156,35 +177,63 @@ export default function ServiceForm({ service }: Props) {
         </div>
       </div>
 
-      <div className="card p-4 flex flex-col gap-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Formulario clinico</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-800">Requiere anamnesis</p>
-            <p className="text-xs text-gray-400">Se activa un formulario al iniciar la consulta</p>
+      <div className="card p-4 flex flex-col gap-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Formularios de evaluacion
+        </p>
+        <p className="text-xs text-gray-400">
+          Selecciona los formularios disponibles para este servicio. El profesional elegira cual aplicar al iniciar la consulta.
+        </p>
+        {availableTemplates.length === 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-xs text-amber-800">No hay formularios disponibles para esta especialidad.</p>
           </div>
-          <button type="button" onClick={() => setRequiresIntake(!requiresIntake)}
-            className={cn("relative inline-flex h-6 w-10 items-center rounded-full transition-colors",
-              requiresIntake ? "bg-blue-600" : "bg-gray-200")}>
-            <span className={cn("inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
-              requiresIntake ? "translate-x-5" : "translate-x-1")} />
-          </button>
-        </div>
-        {requiresIntake && filteredTemplates.length > 0 && (
-          <div>
-            <label className="text-xs text-gray-500 font-medium block mb-2">Template de formulario</label>
-            <div className="flex flex-col gap-2">
-              {filteredTemplates.map(t => (
-                <button key={t.id} type="button" onClick={() => setFormTemplateId(t.id)}
-                  className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all text-left",
-                    formTemplateId === t.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
-                  <span className={cn("text-sm font-medium",
-                    formTemplateId === t.id ? "text-blue-900" : "text-gray-700")}>
-                    {t.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {availableTemplates.map(tmpl => {
+              const isSelected = selectedTemplates.some(t => t.template_id === tmpl.id)
+              const isDefault = selectedTemplates.find(t => t.template_id === tmpl.id)?.is_default ?? false
+              return (
+                <div key={tmpl.id}
+                  className={cn("rounded-xl border-2 transition-all overflow-hidden",
+                    isSelected ? "border-blue-400 bg-blue-50" : "border-gray-200")}>
+                  <button type="button" onClick={() => toggleTemplate(tmpl.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left">
+                    <div className={cn("w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0",
+                      isSelected ? "bg-blue-600 border-blue-600" : "border-gray-300")}>
+                      {isSelected && (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={cn("text-sm font-medium", isSelected ? "text-blue-900" : "text-gray-800")}>
+                        {tmpl.name}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {FORM_TYPE_LABELS[tmpl.form_type] ?? tmpl.form_type}
+                        {tmpl.estimated_minutes ? ` · ~${tmpl.estimated_minutes} min` : ""}
+                        {" · "}{tmpl.fields?.length ?? 0} secciones
+                      </p>
+                    </div>
+                  </button>
+                  {isSelected && (
+                    <div className="border-t border-blue-200 px-4 py-2 flex items-center justify-between">
+                      <p className="text-xs text-blue-700">
+                        {isDefault ? "Formulario por defecto" : "Formulario alternativo"}
+                      </p>
+                      {!isDefault && (
+                        <button type="button" onClick={() => setDefault(tmpl.id)}
+                          className="text-xs text-blue-600 font-medium hover:text-blue-800">
+                          Marcar como defecto
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
