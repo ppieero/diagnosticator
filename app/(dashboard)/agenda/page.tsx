@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { getAppointmentsByDateRange, updateAppointmentStatus } from "@/lib/services/appointments"
 import type { AppointmentWithRelations } from "@/lib/services/appointments"
+import { initConsulta } from "@/lib/services/consulta"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
@@ -52,6 +53,7 @@ export default function AgendaPage() {
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null)
+  const [startingConsulta, setStartingConsulta] = useState(false)
   const [schedules, setSchedules] = useState<Record<string, { start: number; end: number }>>({})
 
   const weekDates = getWeekDates(currentDate)
@@ -130,6 +132,17 @@ export default function AgendaPage() {
       const appHour = new Date(a.scheduled_at).getHours()
       return a.professional_id === profId && a.scheduled_at.startsWith(ds) && appHour === hour
     })
+  }
+
+  async function handleIniciarConsulta(appointmentId: string) {
+    setStartingConsulta(true)
+    try {
+      const encounterId = await initConsulta(appointmentId)
+      router.push(`/consulta/${encounterId}`)
+    } catch (err) {
+      console.error("Error iniciando consulta:", err)
+      setStartingConsulta(false)
+    }
   }
 
   async function handleStatusChange(id: string, status: "confirmed" | "cancelled" | "no_show" | "completed") {
