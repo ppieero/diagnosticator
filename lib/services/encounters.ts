@@ -71,13 +71,22 @@ export async function startEncounter(payload: {
 
 export async function getEncounter(id: string): Promise<Encounter | null> {
   const supabase = createClient()
-  const { data, error } = await supabase
+  const { data: enc, error } = await supabase
     .from("evaluations")
-    .select("*, patient:patients(id, full_name), performer:profiles!performed_by(id, full_name), appointment:appointments(id, scheduled_at, service:services(id, name, specialty_id))")
+    .select("*")
     .eq("id", id)
     .single()
   if (error) { console.error("getEncounter error:", JSON.stringify(error)); return null }
-  return data as unknown as Encounter | null
+  const result = enc as unknown as Encounter
+  const [patRes, apptRes] = await Promise.all([
+    supabase.from("patients").select("id, full_name").eq("id", enc.patient_id).single(),
+    enc.appointment_id
+      ? supabase.from("appointments").select("id, scheduled_at, service:services(id, name, specialty_id)").eq("id", enc.appointment_id).single()
+      : Promise.resolve({ data: null }),
+  ])
+  result.patient = patRes.data as { id: string; full_name: string }
+  result.appointment = apptRes.data as unknown as Encounter["appointment"]
+  return result
 }
 
 export async function getEncounterForms(encounterId: string): Promise<EncounterForm[]> {
