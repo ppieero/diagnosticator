@@ -434,9 +434,16 @@ export default function AgendaPage() {
                 </button>
               )}
               {["scheduled","confirmed"].includes(selectedAppointment.status) && (
-                <button onClick={() => router.push("/patients/" + selectedAppointment.patient_id + "/evaluations/new")}
-                  className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold">
-                  Iniciar consulta
+              {["scheduled","confirmed","in_progress"].includes(selectedAppointment.status) && (
+                <button
+                  onClick={() => handleIniciarConsulta(selectedAppointment.id)}
+                  disabled={startingConsulta}
+                  className="tap-target w-full rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+                  {startingConsulta ? (
+                    <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Iniciando...</>
+                  ) : (
+                    <><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>Iniciar consulta</>
+                  )}
                 </button>
               )}
               {["scheduled","confirmed"].includes(selectedAppointment.status) && (
