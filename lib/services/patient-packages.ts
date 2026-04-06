@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client"
 
 export type PatientPackageStatus = "active" | "completed" | "expired" | "cancelled"
-export type PaymentMode = "full" | "installments" | "pending"
+export type PaymentMode = "package" | "per_session" | "full" | "installments" | "pending"
 
 export interface PatientPackage {
   id: string
@@ -63,7 +63,10 @@ export async function assignPackage(payload: {
     })
     .select("id")
     .single()
-  if (error) throw error
+  if (error) {
+    console.error("assignPackage DB error:", JSON.stringify(error))
+    throw error
+  }
   return data.id
 }
 

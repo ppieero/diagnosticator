@@ -124,8 +124,10 @@ export default function PatientPaquetesPage() {
       setExpiresAt("")
       setNotes("")
       await load()
-    } catch (err) {
-      console.error("Error asignando paquete:", err)
+    } catch (err: unknown) {
+      const e = err as { message?: string; code?: string; details?: string }
+      console.error("Error asignando paquete:", e?.message ?? e?.code ?? JSON.stringify(err))
+      alert("Error: " + (e?.message ?? e?.code ?? JSON.stringify(err)))
     } finally {
       setSaving(false)
     }
