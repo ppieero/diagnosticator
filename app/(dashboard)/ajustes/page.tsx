@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { clearSettingsCache } from "@/lib/services/settings"
 import { cn } from "@/lib/utils"
 
 const LANGUAGES = [
@@ -160,6 +161,7 @@ export default function AjustesPage() {
         updated_at: new Date().toISOString(),
       }, { onConflict: "key" }),
     ])
+    clearSettingsCache()
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)

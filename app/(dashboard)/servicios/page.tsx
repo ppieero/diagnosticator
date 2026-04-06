@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useCurrency } from "@/hooks/useCurrency"
 import { getServices } from "@/lib/services/services"
 import type { Service } from "@/lib/services/services"
 import { createClient } from "@/lib/supabase/client"
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils"
 
 export default function ServiciosPage() {
   const router = useRouter()
+  const { price } = useCurrency()
   const [services, setServices] = useState<Service[]>([])
   const [specialties, setSpecialties] = useState<{ id: string; name: string; color: string }[]>([])
   const [filterSpecialty, setFilterSpecialty] = useState<string>("")
@@ -121,7 +123,7 @@ export default function ServiciosPage() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-gray-900">€{Number(sv.price).toFixed(0)}</p>
+                    <p className="text-sm font-bold text-gray-900">{price(sv.price)}</p>
                     {sv.session_count > 1 && sv.package_price && (
                       <p className="text-xs text-purple-600 font-medium">€{Number(sv.package_price).toFixed(0)} pack</p>
                     )}

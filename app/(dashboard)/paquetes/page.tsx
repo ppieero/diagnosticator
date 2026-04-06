@@ -3,10 +3,12 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getPackages } from "@/lib/services/packages"
 import type { Package } from "@/lib/services/packages"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 export default function PaquetesPage() {
   const router = useRouter()
+  const { price } = useCurrency()
   const [packages, setPackages] = useState<Package[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -69,7 +71,7 @@ export default function PaquetesPage() {
                 </div>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-sm font-bold text-purple-700">€{Number(pkg.price).toFixed(0)}</p>
+                <p className="text-sm font-bold text-purple-700">{price(pkg.price)}</p>
                 <span className={cn("text-xs font-medium px-2 py-0.5 rounded-lg mt-1 inline-block",
                   pkg.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
                   {pkg.is_active ? "Activo" : "Inactivo"}
