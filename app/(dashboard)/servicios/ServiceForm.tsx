@@ -10,12 +10,9 @@ const DURATIONS = [15,20,30,45,60,75,90,120]
 const BUFFERS = [0,5,10,15,20,30]
 const COLORS = ["#0F6E56","#185FA5","#534AB7","#993C1D","#993556","#3B6D11","#854F0B","#5F5E5A"]
 
-interface Props {
-  service?: Service
-  onSaved?: (id: string) => void
-}
+interface Props { service?: Service }
 
-export default function ServiceForm({ service, onSaved }: Props) {
+export default function ServiceForm({ service }: Props) {
   const router = useRouter()
   const [specialties, setSpecialties] = useState<{ id: string; name: string; color: string }[]>([])
   const [templates, setTemplates] = useState<{ id: string; name: string; specialty_id: string }[]>([])
@@ -27,16 +24,11 @@ export default function ServiceForm({ service, onSaved }: Props) {
   const [specialtyId, setSpecialtyId] = useState(service?.specialty_id ?? "")
   const [durationMinutes, setDurationMinutes] = useState(service?.duration_minutes ?? 60)
   const [price, setPrice] = useState(String(service?.price ?? ""))
-  const [sessionCount, setSessionCount] = useState(service?.session_count ?? 1)
-  const [packagePrice, setPackagePrice] = useState(String(service?.package_price ?? ""))
   const [bufferMinutes, setBufferMinutes] = useState(service?.buffer_minutes ?? 0)
   const [color, setColor] = useState(service?.color ?? "")
   const [requiresIntake, setRequiresIntake] = useState(service?.requires_intake ?? false)
   const [formTemplateId, setFormTemplateId] = useState(service?.form_template_id ?? "")
-  const [maxAdvanceDays, setMaxAdvanceDays] = useState(service?.max_advance_days ?? 60)
   const [isActive, setIsActive] = useState(service?.is_active ?? true)
-
-  const isPackage = sessionCount > 1
 
   useEffect(() => {
     async function load() {
@@ -59,6 +51,10 @@ export default function ServiceForm({ service, onSaved }: Props) {
       setError("Nombre y especialidad son obligatorios")
       return
     }
+    if (!price || parseFloat(price) <= 0) {
+      setError("El precio debe ser mayor a 0")
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -67,23 +63,19 @@ export default function ServiceForm({ service, onSaved }: Props) {
         description: description || undefined,
         specialty_id: specialtyId,
         duration_minutes: durationMinutes,
-        price: parseFloat(price) || 0,
-        session_count: sessionCount,
-        package_price: isPackage && packagePrice ? parseFloat(packagePrice) : undefined,
+        price: parseFloat(price),
+        session_count: 1,
         buffer_minutes: bufferMinutes,
         color: color || undefined,
         requires_intake: requiresIntake,
         form_template_id: requiresIntake && formTemplateId ? formTemplateId : undefined,
-        max_advance_days: maxAdvanceDays,
         is_active: isActive,
       }
       if (service) {
         await updateService(service.id, payload)
-        onSaved?.(service.id)
         router.push("/servicios")
       } else {
-        const id = await createService(payload as Parameters<typeof createService>[0])
-        onSaved?.(id)
+        await createService(payload as Parameters<typeof createService>[0])
         router.push("/servicios")
       }
     } catch (err) {
@@ -112,11 +104,13 @@ export default function ServiceForm({ service, onSaved }: Props) {
           <label className="text-xs text-gray-500 font-medium block mb-2">Especialidad</label>
           <div className="flex flex-col gap-2">
             {specialties.map(sp => (
-              <button key={sp.id} type="button" onClick={() => { setSpecialtyId(sp.id); setFormTemplateId("") }}
+              <button key={sp.id} type="button"
+                onClick={() => { setSpecialtyId(sp.id); setFormTemplateId("") }}
                 className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all text-left",
                   specialtyId === sp.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
                 <div className="w-3 h-3 rounded-full" style={{ background: sp.color }} />
-                <span className={cn("text-sm font-medium", specialtyId === sp.id ? "text-blue-900" : "text-gray-700")}>
+                <span className={cn("text-sm font-medium",
+                  specialtyId === sp.id ? "text-blue-900" : "text-gray-700")}>
                   {sp.name}
                 </span>
               </button>
@@ -133,73 +127,33 @@ export default function ServiceForm({ service, onSaved }: Props) {
             {DURATIONS.map(d => (
               <button key={d} type="button" onClick={() => setDurationMinutes(d)}
                 className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all",
-                  durationMinutes === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300")}>
+                  durationMinutes === d
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300")}>
                 {d} min
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-2">Tiempo buffer entre citas</label>
+          <label className="text-xs text-gray-500 font-medium block mb-2">Buffer entre citas</label>
           <div className="flex gap-2 flex-wrap">
             {BUFFERS.map(b => (
               <button key={b} type="button" onClick={() => setBufferMinutes(b)}
                 className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all",
-                  bufferMinutes === b ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300")}>
+                  bufferMinutes === b
+                    ? "bg-gray-700 text-white border-gray-700"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300")}>
                 {b === 0 ? "Sin buffer" : `${b} min`}
               </button>
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-gray-500 font-medium block mb-1">Precio unitario (€)</label>
-            <input type="number" value={price} onChange={e => setPrice(e.target.value)}
-              placeholder="0.00" className="input-base" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 font-medium block mb-1">Antelacion maxima (dias)</label>
-            <input type="number" value={maxAdvanceDays} onChange={e => setMaxAdvanceDays(Number(e.target.value))}
-              className="input-base" />
-          </div>
+        <div>
+          <label className="text-xs text-gray-500 font-medium block mb-1">Precio por sesion (€)</label>
+          <input type="number" value={price} onChange={e => setPrice(e.target.value)}
+            placeholder="0.00" step="0.01" className="input-base" />
         </div>
-      </div>
-
-      <div className="card p-4 flex flex-col gap-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Paquete de sesiones</p>
-        <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
-          <p className="text-xs text-purple-800">
-            Si el servicio se vende como paquete de varias sesiones, configura el numero de sesiones y el precio especial del paquete.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700 flex-1">Numero de sesiones</label>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setSessionCount(Math.max(1, sessionCount - 1))}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 text-lg">
-              −
-            </button>
-            <span className="w-10 text-center text-sm font-semibold text-gray-900">{sessionCount}</span>
-            <button type="button" onClick={() => setSessionCount(sessionCount + 1)}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 text-lg">
-              +
-            </button>
-          </div>
-        </div>
-        {isPackage && (
-          <div>
-            <label className="text-xs text-gray-500 font-medium block mb-1">
-              Precio del paquete ({sessionCount} sesiones) — deja vacio para usar precio unitario x{sessionCount}
-            </label>
-            <input type="number" value={packagePrice} onChange={e => setPackagePrice(e.target.value)}
-              placeholder={String((parseFloat(price) || 0) * sessionCount)} className="input-base" />
-            {packagePrice && price && (
-              <p className="text-xs text-purple-600 mt-1">
-                Ahorro por paquete: €{((parseFloat(price) * sessionCount) - parseFloat(packagePrice)).toFixed(0)}
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="card p-4 flex flex-col gap-4">
@@ -224,7 +178,8 @@ export default function ServiceForm({ service, onSaved }: Props) {
                 <button key={t.id} type="button" onClick={() => setFormTemplateId(t.id)}
                   className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all text-left",
                     formTemplateId === t.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
-                  <span className={cn("text-sm font-medium", formTemplateId === t.id ? "text-blue-900" : "text-gray-700")}>
+                  <span className={cn("text-sm font-medium",
+                    formTemplateId === t.id ? "text-blue-900" : "text-gray-700")}>
                     {t.name}
                   </span>
                 </button>
