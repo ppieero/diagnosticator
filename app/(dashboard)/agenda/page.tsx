@@ -433,7 +433,6 @@ export default function AgendaPage() {
                   Confirmar cita
                 </button>
               )}
-              {["scheduled","confirmed"].includes(selectedAppointment.status) && (
               {["scheduled","confirmed","in_progress"].includes(selectedAppointment.status) && (
                 <button
                   onClick={() => handleIniciarConsulta(selectedAppointment.id)}
