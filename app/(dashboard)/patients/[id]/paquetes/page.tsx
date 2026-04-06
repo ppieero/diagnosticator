@@ -2,10 +2,9 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import {
-  getPatientPackages, assignPackage, useSession, updatePackageStatus
-} from "@/lib/services/patient-packages"
+import { getPatientPackages, assignPackage, useSession, updatePackageStatus } from "@/lib/services/patient-packages"
 import type { PatientPackage, PaymentMode } from "@/lib/services/patient-packages"
+import AvailabilityPicker from "@/components/AvailabilityPicker"
 import { cn } from "@/lib/utils"
 
 const STATUS_CONFIG = {
@@ -16,17 +15,15 @@ const STATUS_CONFIG = {
 }
 
 const PAYMENT_LABELS: Record<PaymentMode, string> = {
+  package: "Paquete",
+  per_session: "Por sesion",
   full: "Pago completo",
   installments: "En cuotas",
   pending: "Pendiente de pago",
 }
 
 interface CatalogPackage {
-  id: string
-  name: string
-  price: number
-  description?: string
-  total_sessions: number
+  id: string; name: string; price: number; description?: string; total_sessions: number
 }
 
 export default function PatientPaquetesPage() {
@@ -34,102 +31,81 @@ export default function PatientPaquetesPage() {
   const router = useRouter()
   const [packages, setPackages] = useState<PatientPackage[]>([])
   const [catalog, setCatalog] = useState<CatalogPackage[]>([])
+  const [availableServices, setAvailableServices] = useState<{ id: string; name: string; price: number; specialty?: { name: string } }[]>([])
   const [professionals, setProfessionals] = useState<{ id: string; full_name: string; specialty: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [patientName, setPatientName] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const [assignType, setAssignType] = useState<"package" | "service">("package")
-  const [availableServices, setAvailableServices] = useState<{ id: string; name: string; price: number; specialty?: { name: string } }[]>([])
-  const [selectedServiceId, setSelectedServiceId] = useState("")
   const [selectedPackageId, setSelectedPackageId] = useState("")
-  const [sessionDate, setSessionDate] = useState("")
+  const [selectedServiceId, setSelectedServiceId] = useState("")
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("")
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("full")
   const [pricePaid, setPricePaid] = useState("")
   const [expiresAt, setExpiresAt] = useState("")
   const [notes, setNotes] = useState("")
+  const [sessionDate, setSessionDate] = useState("")
+  const [sessionTime, setSessionTime] = useState("")
+  const [sessionProfId, setSessionProfId] = useState("")
 
   async function load() {
     setLoading(true)
     const supabase = createClient()
-
-    const [pkgsData, patData, profData] = await Promise.all([
+    const [pkgsData, patData, profData, svsData, pkgItems] = await Promise.all([
       getPatientPackages(patientId),
       supabase.from("patients").select("full_name").eq("id", patientId).single(),
-      supabase.from("professionals")
-        .select("id, profile:profiles(full_name), specialty:specialties(name)")
-        .eq("is_active", true),
+      supabase.from("professionals").select("id, profile:profiles(full_name), specialty:specialties(name)").eq("is_active", true),
+      supabase.from("services").select("id, name, price, specialty:specialties(name)").eq("is_active", true).eq("session_count", 1).order("name"),
+      supabase.from("packages").select("id, name, price, description, items:package_items(quantity)").eq("is_active", true),
     ])
-
     setPackages(pkgsData)
     setPatientName(patData.data?.full_name ?? "")
-
-    const profs = (profData.data ?? []).map((p: { id: string; profile: { full_name: string }; specialty: { name: string } }) => ({
+    setProfessionals((profData.data ?? []).map((p: { id: string; profile: { full_name: string }; specialty: { name: string } }) => ({
       id: p.id,
       full_name: p.profile?.full_name ?? "",
       specialty: p.specialty?.name ?? "",
-    }))
-    setProfessionals(profs)
-
-    const { data: svsData } = await supabase
-      .from("services")
-      .select("id, name, price, specialty:specialties(name)")
-      .eq("is_active", true)
-      .eq("session_count", 1)
-      .order("name")
-    setAvailableServices((svsData ?? []) as unknown as typeof availableServices)
-
-    const { data: pkgItems } = await supabase
-      .from("packages")
-      .select("id, name, price, description, items:package_items(quantity)")
-      .eq("is_active", true)
-
-    const catalogData: CatalogPackage[] = (pkgItems ?? []).map((p: {
-      id: string; name: string; price: number; description?: string
-      items?: { quantity: number }[]
-    }) => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      description: p.description,
+    })))
+    setAvailableServices((svsData.data ?? []) as unknown as typeof availableServices)
+    setCatalog((pkgItems.data ?? []).map((p: { id: string; name: string; price: number; description?: string; items?: { quantity: number }[] }) => ({
+      id: p.id, name: p.name, price: p.price, description: p.description,
       total_sessions: (p.items ?? []).reduce((s: number, i: { quantity: number }) => s + i.quantity, 0) || 1,
-    }))
-    setCatalog(catalogData)
+    })))
     setLoading(false)
   }
 
   useEffect(() => { load() }, [patientId])
 
-  function handleSelectPackage(pkg: CatalogPackage) {
-    setSelectedPackageId(pkg.id)
-    setSelectedServiceId("")
-    setPricePaid(String(pkg.price))
-  }
-
-  function handleSelectService(sv: { id: string; name: string; price: number }) {
-    setSelectedServiceId(sv.id)
-    setSelectedPackageId("")
-    setPricePaid(String(sv.price))
+  function resetForm() {
+    setAssignType("package")
+    setSelectedPackageId(""); setSelectedServiceId(""); setSelectedProfessionalId("")
+    setPaymentMode("full"); setPricePaid(""); setExpiresAt(""); setNotes("")
+    setSessionDate(""); setSessionTime(""); setSessionProfId("")
+    setError(null)
   }
 
   async function handleAssign() {
-    if (!selectedPackageId) return
+    const pkg = catalog.find(p => p.id === selectedPackageId)
+    const sv = availableServices.find(s => s.id === selectedServiceId)
+    if (!pkg && !sv) { setError("Selecciona un paquete o servicio"); return }
+    if (assignType === "service" && paymentMode !== "full" && (!sessionDate || !sessionTime)) {
+      setError("La fecha de sesion es obligatoria cuando el pago es pendiente o en cuotas")
+      return
+    }
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const pkg = catalog.find(p => p.id === selectedPackageId)
-    const sv = availableServices.find(s => s.id === selectedServiceId)
-    if (!pkg && !sv) return
     setSaving(true)
+    setError(null)
     try {
       await assignPackage({
         patient_id: patientId,
         package_id: pkg ? selectedPackageId : undefined,
         service_id: sv ? selectedServiceId : undefined,
-        professional_id: selectedProfessionalId || undefined,
+        professional_id: sessionProfId || selectedProfessionalId || undefined,
         total_sessions: pkg ? pkg.total_sessions : 1,
         payment_mode: paymentMode,
         price_paid: pricePaid ? parseFloat(pricePaid) : undefined,
@@ -138,18 +114,11 @@ export default function PatientPaquetesPage() {
         created_by: user.id,
       })
       setShowForm(false)
-      setSelectedPackageId("")
-      setSelectedProfessionalId("")
-      setPaymentMode("full")
-      setPricePaid("")
-      setExpiresAt("")
-      setNotes("")
-      setSessionDate("")
+      resetForm()
       await load()
-    } catch (err: unknown) {
-      const e = err as { message?: string; code?: string; details?: string }
-      console.error("Error asignando paquete:", e?.message ?? e?.code ?? JSON.stringify(err))
-      alert("Error: " + (e?.message ?? e?.code ?? JSON.stringify(err)))
+    } catch (err) {
+      console.error(err)
+      setError("Error al guardar. Revisa la consola.")
     } finally {
       setSaving(false)
     }
@@ -157,22 +126,17 @@ export default function PatientPaquetesPage() {
 
   async function handleUseSession(pkgId: string) {
     setActionLoading(pkgId)
-    try { await useSession(pkgId) } finally {
-      await load()
-      setActionLoading(null)
-    }
+    try { await useSession(pkgId) } finally { await load(); setActionLoading(null) }
   }
 
   async function handleCancel(pkgId: string) {
     setActionLoading(pkgId)
-    try { await updatePackageStatus(pkgId, "cancelled") } finally {
-      await load()
-      setActionLoading(null)
-    }
+    try { await updatePackageStatus(pkgId, "cancelled") } finally { await load(); setActionLoading(null) }
   }
 
   const active = packages.filter(p => p.status === "active")
   const historical = packages.filter(p => p.status !== "active")
+  const dateRequired = assignType === "service" && paymentMode !== "full"
 
   if (loading) return (
     <div className="px-4 py-8 flex items-center justify-center">
@@ -195,19 +159,18 @@ export default function PatientPaquetesPage() {
         </div>
       </div>
 
-      <button onClick={() => setShowForm(!showForm)}
+      <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm() }}
         className={cn("tap-target w-full rounded-xl text-sm font-semibold transition-colors",
           showForm ? "bg-gray-200 text-gray-700" : "bg-purple-600 text-white hover:bg-purple-700")}>
-        {showForm ? "Cancelar" : "+ Asignar paquete"}
+        {showForm ? "Cancelar" : "+ Asignar paquete o servicio"}
       </button>
 
       {showForm && (
         <div className="card p-4 flex flex-col gap-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo de asignacion</p>
-
           <div className="flex gap-2">
             {(["package","service"] as const).map(t => (
-              <button key={t} type="button" onClick={() => { setAssignType(t); setSelectedPackageId(""); setSelectedServiceId(""); setPricePaid(""); setSessionDate("") }}
+              <button key={t} type="button"
+                onClick={() => { setAssignType(t); setSelectedPackageId(""); setSelectedServiceId(""); setPricePaid(""); setSessionDate(""); setSessionTime(""); setSessionProfId("") }}
                 className={cn("flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-all",
                   assignType === t ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300")}>
                 {t === "package" ? "Paquete del catalogo" : "Servicio individual"}
@@ -215,10 +178,35 @@ export default function PatientPaquetesPage() {
             ))}
           </div>
 
+          {assignType === "package" && (catalog.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-amber-800">No hay paquetes en el catalogo.</p>
+              <button onClick={() => router.push("/paquetes/nuevo")} className="text-xs text-amber-700 font-medium underline mt-1">
+                Crear paquete →
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {catalog.map(pkg => (
+                <button key={pkg.id} type="button"
+                  onClick={() => { setSelectedPackageId(pkg.id); setPricePaid(String(pkg.price)) }}
+                  className={cn("flex items-start justify-between px-4 py-3 rounded-xl border-2 transition-all text-left",
+                    selectedPackageId === pkg.id ? "border-purple-600 bg-purple-50" : "border-gray-200 hover:border-gray-300")}>
+                  <div>
+                    <p className={cn("text-sm font-semibold", selectedPackageId === pkg.id ? "text-purple-900" : "text-gray-800")}>{pkg.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{pkg.total_sessions} sesiones</p>
+                  </div>
+                  <span className="text-sm font-bold text-purple-700 ml-2">€{Number(pkg.price).toFixed(0)}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+
           {assignType === "service" && (
-            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+            <div className="flex flex-col gap-2">
               {availableServices.map(sv => (
-                <button key={sv.id} type="button" onClick={() => handleSelectService(sv)}
+                <button key={sv.id} type="button"
+                  onClick={() => { setSelectedServiceId(sv.id); setPricePaid(String(sv.price)); setSelectedProfessionalId(""); setSessionDate(""); setSessionTime(""); setSessionProfId("") }}
                   className={cn("flex items-center justify-between px-4 py-2.5 rounded-xl border-2 transition-all text-left",
                     selectedServiceId === sv.id ? "border-purple-600 bg-purple-50" : "border-gray-200 hover:border-gray-300")}>
                   <div>
@@ -231,73 +219,24 @@ export default function PatientPaquetesPage() {
             </div>
           )}
 
-          {assignType === "service" && selectedServiceId && (
-            <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1">
-                Fecha de la sesion (opcional — agendara automaticamente)
-              </label>
-              <input type="datetime-local" value={sessionDate}
-                onChange={e => setSessionDate(e.target.value)}
-                min={new Date().toISOString().slice(0,16)}
-                className="input-base" />
-              {sessionDate && (
-                <p className="text-xs text-green-600 mt-1">
-                  La sesion quedara agendada para {new Date(sessionDate).toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "long" })} a las {new Date(sessionDate).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
-                </p>
-              )}
-            </div>
-          )}
-
-          {assignType === "package" && (catalog.length === 0 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <p className="text-xs text-amber-800">No hay paquetes en el catalogo. Crea uno en Paquetes primero.</p>
-              <button onClick={() => router.push("/paquetes/nuevo")} className="text-xs text-amber-700 font-medium underline mt-1">
-                Ir a crear paquete →
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {catalog.map(pkg => (
-                <button key={pkg.id} type="button" onClick={() => handleSelectPackage(pkg)}
-                  className={cn("flex items-start justify-between px-4 py-3 rounded-xl border-2 transition-all text-left",
-                    selectedPackageId === pkg.id ? "border-purple-600 bg-purple-50" : "border-gray-200 hover:border-gray-300")}>
-                  <div>
-                    <p className={cn("text-sm font-semibold", selectedPackageId === pkg.id ? "text-purple-900" : "text-gray-800")}>
-                      {pkg.name}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{pkg.total_sessions} sesiones</p>
-                    {pkg.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{pkg.description}</p>
-                    )}
-                  </div>
-                  <span className="text-sm font-bold text-purple-700 flex-shrink-0 ml-2">
-                    €{Number(pkg.price).toFixed(0)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
           {(selectedPackageId || selectedServiceId) && (
             <>
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-2">Profesional asignado (opcional)</label>
-                <select value={selectedProfessionalId} onChange={e => setSelectedProfessionalId(e.target.value)}
-                  className="input-base">
-                  <option value="">Sin asignar</option>
-                  {professionals.map(prof => (
-                    <option key={prof.id} value={prof.id}>
-                      {prof.full_name} — {prof.specialty}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {assignType === "package" && (
+                <div>
+                  <label className="text-xs text-gray-500 font-medium block mb-2">Profesional asignado (opcional)</label>
+                  <select value={selectedProfessionalId} onChange={e => setSelectedProfessionalId(e.target.value)} className="input-base">
+                    <option value="">Sin asignar</option>
+                    {professionals.map(prof => (
+                      <option key={prof.id} value={prof.id}>{prof.full_name} — {prof.specialty}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs text-gray-500 font-medium block mb-1">Precio cobrado (€)</label>
                 <input type="number" value={pricePaid} onChange={e => setPricePaid(e.target.value)}
                   placeholder="0.00" step="0.01" className="input-base" />
-                <p className="text-xs text-gray-400 mt-1">Precio sugerido del paquete ya cargado</p>
               </div>
 
               <div>
@@ -313,6 +252,31 @@ export default function PatientPaquetesPage() {
                 </div>
               </div>
 
+              {assignType === "service" && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {dateRequired ? "Agendar sesion (obligatorio)" : "Agendar sesion (opcional)"}
+                  </p>
+                  {dateRequired && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <p className="text-xs text-amber-800">Con pago pendiente o en cuotas debes seleccionar fecha y hora para reservar el slot.</p>
+                    </div>
+                  )}
+                  <AvailabilityPicker
+                    professionalId={selectedProfessionalId || undefined}
+                    selectedDate={sessionDate}
+                    selectedTime={sessionTime}
+                    selectedProfessionalId={sessionProfId}
+                    onSelect={(date, time, profId) => {
+                      setSessionDate(date)
+                      setSessionTime(time)
+                      setSessionProfId(profId)
+                      if (!selectedProfessionalId && profId) setSelectedProfessionalId(profId)
+                    }}
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-gray-500 font-medium block mb-1">Vencimiento (opcional)</label>
                 <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="input-base" />
@@ -324,7 +288,14 @@ export default function PatientPaquetesPage() {
                   rows={2} placeholder="Observaciones..." className="input-base resize-none" />
               </div>
 
-              <button onClick={handleAssign} disabled={saving}
+              {error && (
+                <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+
+              <button onClick={handleAssign}
+                disabled={saving || (dateRequired && (!sessionDate || !sessionTime))}
                 className="tap-target w-full rounded-xl bg-purple-600 text-white text-sm font-semibold disabled:opacity-50">
                 {saving ? "Guardando..." : "Confirmar asignacion →"}
               </button>
@@ -340,7 +311,8 @@ export default function PatientPaquetesPage() {
             const st = STATUS_CONFIG[pkg.status]
             const progress = pkg.total_sessions > 0 ? pkg.sessions_used / pkg.total_sessions : 0
             const remaining = pkg.total_sessions - pkg.sessions_used
-            const pkgName = (pkg.package as { name: string } | undefined)?.name ?? "Paquete"
+            const pkgName = (pkg.package as { name: string } | undefined)?.name
+              ?? (pkg.service as { name: string } | undefined)?.name ?? "Paquete"
             return (
               <div key={pkg.id} className="card p-4 flex flex-col gap-3">
                 <div className="flex items-start justify-between">
@@ -375,8 +347,7 @@ export default function PatientPaquetesPage() {
                     className="flex-1 tap-target rounded-xl bg-green-600 text-white text-xs font-semibold disabled:opacity-50">
                     {actionLoading === pkg.id ? "..." : `Usar sesion (${remaining} restantes)`}
                   </button>
-                  <button onClick={() => handleCancel(pkg.id)}
-                    disabled={actionLoading === pkg.id}
+                  <button onClick={() => handleCancel(pkg.id)} disabled={actionLoading === pkg.id}
                     className="px-3 tap-target rounded-xl border border-red-300 text-red-500 text-xs font-medium disabled:opacity-50">
                     Cancelar
                   </button>
@@ -399,7 +370,8 @@ export default function PatientPaquetesPage() {
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Historial ({historical.length})</p>
           {historical.map(pkg => {
             const st = STATUS_CONFIG[pkg.status]
-            const pkgName = (pkg.package as { name: string } | undefined)?.name ?? "Paquete"
+            const pkgName = (pkg.package as { name: string } | undefined)?.name
+              ?? (pkg.service as { name: string } | undefined)?.name ?? "Paquete"
             return (
               <div key={pkg.id} className="card p-3 opacity-70">
                 <div className="flex items-center justify-between">
