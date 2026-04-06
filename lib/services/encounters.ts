@@ -98,6 +98,8 @@ export async function getEncounterForms(encounterId: string): Promise<EncounterF
   return (data ?? []) as unknown as EncounterForm[]
 }
 
+const VALID_FORM_TYPES = ["initial","evaluation","followup"]
+
 export async function saveEncounterForm(payload: {
   encounter_id: string
   template_id: string
@@ -105,6 +107,7 @@ export async function saveEncounterForm(payload: {
   answers: Record<string, unknown>
   completed_by: string
 }): Promise<string> {
+  payload.form_type = VALID_FORM_TYPES.includes(payload.form_type) ? payload.form_type : "initial"
   const supabase = createClient()
   const { data: existing } = await supabase
     .from("encounter_forms")
