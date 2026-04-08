@@ -61,7 +61,7 @@ export default function ConsultasHistorialPage() {
       for (const enc of encs) {
         enc.specialty = spMap[enc.specialty_id]
         const { data: forms } = await supabase
-          .from("encounter_forms")
+          .from("form_responses")
           .select("id, answers, template:specialty_form_templates(name)")
           .eq("encounter_id", enc.id)
         enc.forms = (forms ?? []) as unknown as Encounter["forms"]
@@ -228,7 +228,7 @@ export default function ConsultasHistorialPage() {
                   )}
 
                   {enc.status === "in_progress" && (
-                    <button onClick={() => router.push(`/consulta/${enc.id}`)}
+                    <button onClick={() => router.push(`/patients/${patientId}/evaluations/${enc.id}`)}
                       className="tap-target w-full rounded-xl bg-blue-600 text-white text-xs font-semibold">
                       Continuar consulta →
                     </button>

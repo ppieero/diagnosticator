@@ -137,8 +137,8 @@ export default function AgendaPage() {
   async function handleIniciarConsulta(appointmentId: string) {
     setStartingConsulta(true)
     try {
-      const encounterId = await initConsulta(appointmentId)
-      router.push(`/consulta/${encounterId}`)
+      const { encounterId, patientId } = await initConsulta(appointmentId)
+      router.push(`/patients/${patientId}/evaluations/${encounterId}`)
     } catch (err) {
       console.error("Error iniciando consulta:", err)
       setStartingConsulta(false)

@@ -123,3 +123,87 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ANTHROPIC_API_KEY=
+## Módulos implementados (estado abril 2026)
+✓ Auth + Login
+✓ Dashboard — métricas del día
+✓ Pacientes — CRUD completo
+✓ Agenda — lista + grilla + iniciar consulta
+✓ Flujo clínico — anamnesis (pantalla 1) + tipo sesión (pantalla 2) + formulario + completar
+✓ Motor formularios dinámico — scale_0_10, body_map, range_of_motion, multiselect, radio
+✓ Evaluaciones — lista templates + detalle
+✓ Servicios + Paquetes + Productos
+✓ Pagos — lista + nuevo + recibo PDF
+✓ Ajustes — moneda dinámica, idioma, IVA
+
+## Pendiente — Historia clínica rediseñada
+- Ficha paciente: tabs Todo/Evaluaciones/Diagnósticos/Tratamientos/Paquetes
+- Solo lectura en ficha — creación ocurre en /consulta/[eid]
+- Evaluación → genera diagnóstico → genera tratamiento (flujo unidireccional)
+- lib/services/diagnoses.ts — CRUD diagnoses + treatment_plans
+- Diagnóstico: evaluation_id (FK), diagnosis_code CIE-10, severity, rationale
+- Tratamiento: diagnosis_id (FK), encounter_id (FK), plan_type, goals, total_sessions
+
+## Constraints BD críticos
+- diagnoses.status: presumptive | confirmed | ruled_out | under_review
+- diagnoses.severity: mild | moderate | severe | critical
+- treatment_plans.plan_type: exercise | medication | therapy | diet | combined | other
+- treatment_plans.status: active | on_hold | completed | stopped
+- encounter_forms.form_type: initial | evaluation | followup
+- evaluations requiere evaluation_type_id y performed_by (NOT NULL)
+
+## Moneda dinámica
+- hook: hooks/useCurrency.ts → { symbol, price(amount, decimals?) }
+- settings cache: lib/services/settings.ts → clearSettingsCache() al guardar
+
+## Notas VPS
+- Runtime: Node.js + PM2
+- Build: npm run build && pm2 restart diagnosticator
+
+
+## Refactor v2 — abril 2026
+### Sistema unificado (eliminar referencias v1)
+- ELIMINADO: app/(dashboard)/consulta/ — ruta v1 rota
+- ELIMINADO: lib/services/encounters.ts — usaba encounter_forms (no existe)
+- ELIMINADO: components/form-engine/ — reemplazado por components/forms/
+- ACTIVO: lib/services/evaluations.ts — sistema v2 nativo
+- ACTIVO: components/forms/FormEngine.tsx — con SectionRenderer, FieldRenderer
+
+### Flujo clínico correcto (post-refactor)
+1. Agenda → tap cita → "Iniciar consulta"
+2. handleIniciarConsulta() → initConsulta(appointmentId)
+3. initConsulta() → createEvaluation() → update appointment_id + session_number
+4. Navega a /patients/[patientId]/evaluations/[eid]
+5. FormEngine v2 carga template por specialty_id + encounter_type
+6. Guarda en form_responses (NO encounter_forms)
+7. completeEvaluation() → status=completed
+
+### Cadena de relaciones real (verificada en BD)
+appointments.id
+  └─→ evaluations.appointment_id (sin FK constraint, campo uuid)
+        └─→ form_responses.encounter_id (FK → evaluations.id)
+        └─→ diagnoses.evaluation_id (FK → evaluations.id)
+              └─→ treatment_plans.diagnosis_id (FK → diagnoses.id)
+              └─→ treatment_plans.encounter_id (FK → evaluations.id)
+
+### Tabla form_responses (NO encounter_forms)
+- template_id → specialty_form_templates
+- encounter_id → evaluations
+- answers: jsonb
+- computed_scores: jsonb
+- body_map_data: jsonb array
+- status: draft | in_progress | completed
+
+### Tabla anamnesis (singular, NO anamneses)
+Campos: height_cm, weight_kg, pregnancy_status, smoking_status,
+        alcohol_status, main_complaint, current_symptoms (array),
+        active_medications (jsonb), known_allergies (jsonb),
+        personal_history (jsonb), family_history (jsonb)
+
+### Pendiente
+- Módulo Expediente Clínico (/expediente)
+  - /expediente → búsqueda pacientes con filtros
+  - /expediente/[patient_id] → tabs: Resumen/Anamnesis/Timeline/Diagnósticos/Tratamientos
+  - /expediente/[patient_id]/evaluacion/[eid] → detalle con FormEngine readonly
+    + diagnóstico derivado + plan de tratamiento
+- Diagnóstico y tratamiento se crean dentro del flujo de evaluación
+  (/patients/[id]/evaluations/[eid] al completar)
