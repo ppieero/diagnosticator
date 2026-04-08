@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { getPatientPackages, assignPackage, useSession, updatePackageStatus } from "@/lib/services/patient-packages"
 import type { PatientPackage, PaymentMode } from "@/lib/services/patient-packages"
 import AvailabilityPicker from "@/components/AvailabilityPicker"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 const STATUS_CONFIG = {
@@ -29,6 +30,7 @@ interface CatalogPackage {
 export default function PatientPaquetesPage() {
   const { id: patientId } = useParams<{ id: string }>()
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [packages, setPackages] = useState<PatientPackage[]>([])
   const [catalog, setCatalog] = useState<CatalogPackage[]>([])
   const [availableServices, setAvailableServices] = useState<{ id: string; name: string; price: number; specialty?: { name: string } }[]>([])
@@ -196,7 +198,7 @@ export default function PatientPaquetesPage() {
                     <p className={cn("text-sm font-semibold", selectedPackageId === pkg.id ? "text-purple-900" : "text-gray-800")}>{pkg.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{pkg.total_sessions} sesiones</p>
                   </div>
-                  <span className="text-sm font-bold text-purple-700 ml-2">€{Number(pkg.price).toFixed(0)}</span>
+                  <span className="text-sm font-bold text-purple-700 ml-2">{symbol}{Number(pkg.price).toFixed(0)}</span>
                 </button>
               ))}
             </div>
@@ -213,7 +215,7 @@ export default function PatientPaquetesPage() {
                     <p className={cn("text-sm font-semibold", selectedServiceId === sv.id ? "text-purple-900" : "text-gray-800")}>{sv.name}</p>
                     <p className="text-xs text-gray-400">{(sv.specialty as { name: string })?.name} · 1 sesion</p>
                   </div>
-                  <span className="text-sm font-bold text-purple-700 ml-2">€{Number(sv.price).toFixed(0)}</span>
+                  <span className="text-sm font-bold text-purple-700 ml-2">{symbol}{Number(sv.price).toFixed(0)}</span>
                 </button>
               ))}
             </div>
@@ -234,7 +236,7 @@ export default function PatientPaquetesPage() {
               )}
 
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">Precio cobrado (€)</label>
+                <label className="text-xs text-gray-500 font-medium block mb-1">Precio cobrado ({symbol})</label>
                 <input type="number" value={pricePaid} onChange={e => setPricePaid(e.target.value)}
                   placeholder="0.00" step="0.01" className="input-base" />
               </div>
@@ -320,7 +322,7 @@ export default function PatientPaquetesPage() {
                     <p className="text-sm font-semibold text-gray-900">{pkgName}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {PAYMENT_LABELS[pkg.payment_mode]}
-                      {pkg.price_paid ? ` · €${Number(pkg.price_paid).toFixed(0)}` : ""}
+                      {pkg.price_paid ? ` · ${symbol}${Number(pkg.price_paid).toFixed(0)}` : ""}
                     </p>
                   </div>
                   <span className={cn("text-xs font-medium px-2 py-1 rounded-lg", st.bg, st.text)}>{st.label}</span>

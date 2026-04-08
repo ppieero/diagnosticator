@@ -6,6 +6,7 @@ import { createService, updateService } from "@/lib/services/services"
 import { getTemplatesForSpecialty, assignTemplatesToService } from "@/lib/services/form-templates"
 import type { Service } from "@/lib/services/services"
 import type { FormTemplate } from "@/lib/services/form-templates"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 const DURATIONS = [15,20,30,45,60,75,90,120]
@@ -16,6 +17,7 @@ interface Props { service?: Service }
 
 export default function ServiceForm({ service }: Props) {
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [specialties, setSpecialties] = useState<{ id: string; name: string; color: string }[]>([])
   const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([])
   const [selectedTemplates, setSelectedTemplates] = useState<{ template_id: string; is_default: boolean; sort_order: number }[]>([])
@@ -171,7 +173,7 @@ export default function ServiceForm({ service }: Props) {
           </div>
         </div>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Precio por sesion (€)</label>
+          <label className="text-xs text-gray-500 font-medium block mb-1">Precio por sesion ({symbol})</label>
           <input type="number" value={price} onChange={e => setPrice(e.target.value)}
             placeholder="0.00" step="0.01" className="input-base" />
         </div>

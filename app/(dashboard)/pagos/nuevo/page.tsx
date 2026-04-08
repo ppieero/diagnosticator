@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { createPayment } from "@/lib/services/payments"
@@ -11,7 +11,7 @@ const METHOD_LABELS: Record<string, string> = {
   bizum: "Bizum", mbway: "MB Way", insurance: "Seguro medico",
 }
 
-export default function NuevoPagoPage() {
+function NuevoPagoContent() {
   const router = useRouter()
   const params = useSearchParams()
   const { price, settings } = useCurrency()
@@ -188,5 +188,13 @@ export default function NuevoPagoPage() {
         {saving ? "Registrando..." : `Registrar ${status === "paid" ? "cobro" : "pago pendiente"} →`}
       </button>
     </div>
+  )
+}
+
+export default function NuevoPagoPage() {
+  return (
+    <Suspense fallback={<div className="px-4 py-5">Cargando...</div>}>
+      <NuevoPagoContent />
+    </Suspense>
   )
 }

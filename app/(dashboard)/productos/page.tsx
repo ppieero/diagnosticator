@@ -3,10 +3,12 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getProducts } from "@/lib/services/products"
 import type { Product } from "@/lib/services/products"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 export default function ProductosPage() {
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -76,10 +78,10 @@ export default function ProductosPage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-gray-900">€{Number(prod.price).toFixed(2)}</p>
+                  <p className="text-sm font-bold text-gray-900">{symbol}{Number(prod.price).toFixed(2)}</p>
                   {prod.tax_rate > 0 && (
                     <p className="text-xs text-gray-400">
-                      c/IVA €{(Number(prod.price) * (1 + prod.tax_rate / 100)).toFixed(2)}
+                      c/IVA {symbol}{(Number(prod.price) * (1 + prod.tax_rate / 100)).toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -97,7 +99,7 @@ export default function ProductosPage() {
               className="card p-3 text-left opacity-60 w-full">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500">{prod.name}</p>
-                <p className="text-sm text-gray-400">€{Number(prod.price).toFixed(2)}</p>
+                <p className="text-sm text-gray-400">{symbol}{Number(prod.price).toFixed(2)}</p>
               </div>
             </button>
           ))}

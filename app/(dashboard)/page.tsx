@@ -96,7 +96,7 @@ export default function DashboardPage() {
 
       const profMap = new Map<string, ProfStats>()
       for (const a of appts) {
-        const prof = a.professional as { id: string; profile: { full_name: string }; specialty: { name: string; color: string } } | null
+        const prof = a.professional as unknown as { id: string; profile: { full_name: string }; specialty: { name: string; color: string } } | null
         if (!prof) continue
         if (!profMap.has(prof.id)) {
           profMap.set(prof.id, {
@@ -123,9 +123,9 @@ export default function DashboardPage() {
           id: a.id,
           scheduled_at: a.scheduled_at,
           patient_name: (a as { patient?: { full_name: string } }).patient?.full_name ?? "Paciente",
-          service_name: (a.service as { name: string } | null)?.name ?? "",
+          service_name: (a.service as unknown as { name: string } | null)?.name ?? "",
           status: a.status,
-          specialty_color: (a.specialty as { color: string } | null)?.color ?? "#888",
+          specialty_color: (a.specialty as unknown as { color: string } | null)?.color ?? "#888",
         }))
       setUpcoming(next)
       setLoading(false)

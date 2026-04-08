@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { getProfessional, updateProfessional, updateProfile, saveSchedule } from "@/lib/services/professionals"
+import { getProfessional, updateProfessionalAndProfile, updateProfessional, saveSchedule } from "@/lib/services/professionals"
 import type { ProfessionalFull, ScheduleDay } from "@/lib/services/professionals"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils"
 const DAYS = [
   { value: 1, label: "Lunes" },
   { value: 2, label: "Martes" },
-  { value: 3, label: "Miercoles" },
+  { value: 3, label: "Miércoles" },
   { value: 4, label: "Jueves" },
   { value: 5, label: "Viernes" },
-  { value: 6, label: "Sabado" },
+  { value: 6, label: "Sábado" },
   { value: 0, label: "Domingo" },
 ]
 
@@ -45,6 +45,8 @@ export default function ProfesionalDetailPage() {
   const [prof, setProf] = useState<ProfessionalFull | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
   const [services, setServices] = useState<{ id: string; name: string; specialty_id: string }[]>([])
 
@@ -82,18 +84,25 @@ export default function ProfesionalDetailPage() {
       setBio(data.bio ?? "")
       setDescription(data.description ?? "")
       setColor(data.color ?? "#185FA5")
-      setSlotDuration(data.slot_duration ?? 60)
+      const savedDuration = data.slot_duration ?? 60
+      setSlotDuration(savedDuration)
       setIsActive(data.is_active)
       setSelectedServices(data.services_ids ?? [])
 
-      if (data.schedule && data.schedule.length > 0) {
-        setSchedule(DAYS.map(d => {
-          const saved = data.schedule!.find(s => s.day_of_week === d.value)
-          return saved
-            ? { ...saved }
-            : { professional_id: pid, day_of_week: d.value, start_time: "09:00", end_time: "18:00", slot_duration_minutes: 60, is_active: false }
-        }))
-      }
+      const toHHMM = (t: string) => t?.slice(0, 5) ?? "09:00"
+      setSchedule(DAYS.map(d => {
+        const saved = data.schedule?.find(s => s.day_of_week === d.value)
+        return saved
+          ? { ...saved, start_time: toHHMM(saved.start_time), end_time: toHHMM(saved.end_time) }
+          : {
+              professional_id: pid,
+              day_of_week: d.value,
+              start_time: "09:00",
+              end_time: "18:00",
+              slot_duration_minutes: savedDuration,
+              is_active: false,
+            }
+      }))
 
       const supabase = createClient()
       const { data: srvs } = await supabase
@@ -107,22 +116,37 @@ export default function ProfesionalDetailPage() {
     load()
   }, [pid, router])
 
+  // Sync slotDuration to all schedule days when it changes
+  function handleSlotDurationChange(val: number) {
+    setSlotDuration(val)
+    setSchedule(prev => prev.map(d => ({ ...d, slot_duration_minutes: val })))
+  }
+
   async function handleSave() {
     if (!prof) return
     setSaving(true)
+    setError(null)
+    setSaved(false)
     try {
-      await updateProfile(prof.user_id, { full_name: fullName, email, phone })
-      await updateProfessional(prof.id, {
-        license_number: licenseNumber,
-        bio, description, color,
-        slot_duration: slotDuration,
-        is_active: isActive,
-        services_ids: selectedServices,
-      })
+      await updateProfessionalAndProfile(
+        prof.id,
+        prof.user_id,
+        { full_name: fullName, email, phone },
+        {
+          license_number: licenseNumber,
+          bio,
+          description,
+          color,
+          slot_duration: slotDuration,
+          is_active: isActive,
+          services_ids: selectedServices,
+        }
+      )
       await saveSchedule(prof.id, schedule)
-      router.push("/profesionales")
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      console.error(err)
+      setError(err instanceof Error ? err.message : "Error al guardar. Intentá nuevamente.")
     } finally {
       setSaving(false)
     }
@@ -151,8 +175,6 @@ export default function ProfesionalDetailPage() {
   )
   if (!prof) return null
 
-  const profile = prof.profile as { full_name: string }
-
   return (
     <div className="px-4 py-5 fade-up flex flex-col gap-4">
       <div className="flex items-center gap-3">
@@ -170,12 +192,19 @@ export default function ProfesionalDetailPage() {
           <div>
             <p className="text-base font-semibold text-gray-900">{fullName}</p>
             <p className="text-xs text-gray-400">
-              {(prof.specialty as { name: string })?.name}
+              {(prof.specialty as unknown as { name: string })?.name}
             </p>
           </div>
         </div>
         <button
-          onClick={() => updateProfessional(prof.id, { is_active: !isActive }).then(() => setIsActive(!isActive))}
+          onClick={async () => {
+            try {
+              await updateProfessional(prof.id, { is_active: !isActive })
+              setIsActive(!isActive)
+            } catch {
+              setError("Error al cambiar estado")
+            }
+          }}
           className={cn("text-xs font-medium px-3 py-1.5 rounded-xl border transition-colors",
             isActive ? "border-green-300 bg-green-50 text-green-700" : "border-gray-300 bg-gray-50 text-gray-500"
           )}>
@@ -208,7 +237,7 @@ export default function ProfesionalDetailPage() {
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-base" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">Telefono</label>
+                <label className="text-xs text-gray-500 font-medium block mb-1">Teléfono</label>
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="input-base" />
               </div>
             </div>
@@ -220,16 +249,16 @@ export default function ProfesionalDetailPage() {
           </div>
 
           <div className="card p-4 flex flex-col gap-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Perfil clinico</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Perfil clínico</p>
             <div>
               <label className="text-xs text-gray-500 font-medium block mb-1">Bio corta (resumen)</label>
               <input value={bio} onChange={e => setBio(e.target.value)}
                 placeholder="Especialista en..." className="input-base" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1">Descripcion completa</label>
+              <label className="text-xs text-gray-500 font-medium block mb-1">Descripción completa</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)}
-                rows={3} placeholder="Descripcion para los pacientes..." className="input-base resize-none" />
+                rows={3} placeholder="Descripción para los pacientes..." className="input-base resize-none" />
             </div>
           </div>
 
@@ -252,16 +281,15 @@ export default function ProfesionalDetailPage() {
         <div className="flex flex-col gap-3">
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
             <p className="text-xs text-blue-800">
-              Los horarios configurados aqui determinan los slots disponibles en la agenda.
-              Las zonas fuera del horario apareceran en amarillo y no permitiran agendar citas.
+              Los horarios configurados aquí determinan los slots disponibles en la agenda.
             </p>
           </div>
 
           <div className="card p-4 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Duracion de cada slot</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Duración de cada slot</p>
             <div className="flex gap-2 flex-wrap">
               {DURATIONS.map(d => (
-                <button key={d.value} type="button" onClick={() => setSlotDuration(d.value)}
+                <button key={d.value} type="button" onClick={() => handleSlotDurationChange(d.value)}
                   className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all",
                     slotDuration === d.value
                       ? "bg-blue-600 text-white border-blue-600"
@@ -360,6 +388,18 @@ export default function ProfesionalDetailPage() {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {saved && (
+        <div className="bg-green-50 border border-green-300 rounded-xl px-4 py-3">
+          <p className="text-sm text-green-700 font-medium">Cambios guardados correctamente</p>
         </div>
       )}
 

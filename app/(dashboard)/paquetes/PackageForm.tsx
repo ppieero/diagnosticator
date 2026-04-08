@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { createPackage, updatePackage } from "@/lib/services/packages"
 import type { Package, PackageItem } from "@/lib/services/packages"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 interface ServiceOption {
@@ -15,6 +16,7 @@ interface Props { pkg?: Package }
 
 export default function PackageForm({ pkg }: Props) {
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [services, setServices] = useState<ServiceOption[]>([])
   const [specialties, setSpecialties] = useState<{ id: string; name: string; color: string }[]>([])
   const [filterSpecialty, setFilterSpecialty] = useState("")
@@ -109,15 +111,15 @@ export default function PackageForm({ pkg }: Props) {
             rows={2} placeholder="Descripcion visible para el paciente..." className="input-base resize-none" />
         </div>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Precio del paquete (€)</label>
+          <label className="text-xs text-gray-500 font-medium block mb-1">Precio del paquete ({symbol})</label>
           <input type="number" value={price} onChange={e => setPrice(e.target.value)}
             placeholder="0.00" className="input-base" />
           {totalSessionPrice > 0 && (
             <p className="text-xs text-gray-400 mt-1">
-              Precio unitario sumado: €{totalSessionPrice.toFixed(0)}
+              Precio unitario sumado: {symbol}{totalSessionPrice.toFixed(0)}
               {parseFloat(price) > 0 && parseFloat(price) < totalSessionPrice && (
                 <span className="text-green-600 font-medium ml-2">
-                  Ahorro: €{(totalSessionPrice - parseFloat(price)).toFixed(0)}
+                  Ahorro: {symbol}{(totalSessionPrice - parseFloat(price)).toFixed(0)}
                 </span>
               )}
             </p>
@@ -196,7 +198,7 @@ export default function PackageForm({ pkg }: Props) {
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: spColor }} />
                   <div>
                     <p className={cn("text-sm font-medium", inPackage ? "text-purple-900" : "text-gray-800")}>{sv.name}</p>
-                    <p className="text-xs text-gray-400">{sv.duration_minutes} min · €{Number(sv.price).toFixed(0)}</p>
+                    <p className="text-xs text-gray-400">{sv.duration_minutes} min · {symbol}{Number(sv.price).toFixed(0)}</p>
                   </div>
                 </div>
                 <div className={cn("w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0",

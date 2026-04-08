@@ -4,10 +4,12 @@ import { useParams, useRouter } from "next/navigation"
 import { getPackage } from "@/lib/services/packages"
 import type { Package } from "@/lib/services/packages"
 import PackageForm from "../PackageForm"
+import { useCurrency } from "@/hooks/useCurrency"
 
 export default function PaqueteDetailPage() {
   const { pkid } = useParams<{ pkid: string }>()
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [pkg, setPkg] = useState<Package | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -43,7 +45,7 @@ export default function PaqueteDetailPage() {
           </div>
           <div>
             <p className="text-base font-semibold text-gray-900">{pkg.name}</p>
-            <p className="text-xs text-purple-600 font-medium">€{Number(pkg.price).toFixed(0)}</p>
+            <p className="text-xs text-purple-600 font-medium">{symbol}{Number(pkg.price).toFixed(0)}</p>
           </div>
         </div>
       </div>

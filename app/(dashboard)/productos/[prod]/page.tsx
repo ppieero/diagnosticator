@@ -4,10 +4,12 @@ import { useParams, useRouter } from "next/navigation"
 import { getProduct } from "@/lib/services/products"
 import type { Product } from "@/lib/services/products"
 import ProductForm from "../ProductForm"
+import { useCurrency } from "@/hooks/useCurrency"
 
 export default function ProductoDetailPage() {
   const { prod } = useParams<{ prod: string }>()
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -45,7 +47,7 @@ export default function ProductoDetailPage() {
           </div>
           <div>
             <p className="text-base font-semibold text-gray-900">{product.name}</p>
-            <p className="text-xs text-amber-700 font-medium">€{Number(product.price).toFixed(2)}</p>
+            <p className="text-xs text-amber-700 font-medium">{symbol}{Number(product.price).toFixed(2)}</p>
           </div>
         </div>
       </div>

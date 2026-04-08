@@ -34,8 +34,9 @@ export async function createPayment(payload: {
 }): Promise<Payment> {
   const supabase = createClient()
   const settings = await getClinicSettings()
-  const { data: seqData } = await supabase.rpc("nextval", { seq: "invoice_seq" }).single().catch(() => ({ data: null }))
-  const invNum = `${settings.billing.invoice_prefix}-${new Date().getFullYear()}-${String(seqData ?? Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`
+  const { data: seqData, error: seqError } = await supabase.rpc("nextval", { seq: "invoice_seq" }).single()
+  const seqNum = (!seqError && seqData) ? seqData : Math.floor(Math.random() * 9000) + 1000
+  const invNum = `${settings.billing.invoice_prefix}-${new Date().getFullYear()}-${String(seqNum).padStart(4, "0")}`
   const taxRate = settings.billing.tax_enabled ? settings.billing.tax_rate : 0
   const taxAmount = Math.round(payload.amount * taxRate / 100 * 100) / 100
   const total = Math.round((payload.amount + taxAmount) * 100) / 100

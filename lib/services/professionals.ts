@@ -55,12 +55,17 @@ export async function getProfessional(id: string): Promise<ProfessionalFull | nu
     .single()
   if (error) return null
   const prof = data as unknown as ProfessionalFull
-  const { data: sched } = await supabase
-    .from("professional_availability")
-    .select("*")
-    .eq("professional_id", id)
-    .order("day_of_week")
-  prof.schedule = (sched ?? []) as ScheduleDay[]
+  // Use admin API to bypass RLS on professional_availability
+  try {
+    const res = await fetch(`/api/professionals/${id}/schedule`)
+    if (res.ok) {
+      prof.schedule = await res.json()
+    } else {
+      prof.schedule = []
+    }
+  } catch {
+    prof.schedule = []
+  }
   return prof
 }
 
@@ -83,6 +88,32 @@ export async function createProfessional(payload: {
   return data.id
 }
 
+export async function updateProfessionalAndProfile(
+  id: string,
+  userId: string,
+  profile: Partial<{ full_name: string; email: string; phone: string }>,
+  professional: Partial<{
+    specialty_id: string
+    license_number: string
+    bio: string
+    description: string
+    color: string
+    slot_duration: number
+    services_ids: string[]
+    is_active: boolean
+  }>
+): Promise<void> {
+  const res = await fetch(`/api/professionals/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, profile, professional }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error ?? "Error al guardar")
+  }
+}
+
 export async function updateProfessional(id: string, payload: Partial<{
   specialty_id: string
   license_number: string
@@ -93,44 +124,27 @@ export async function updateProfessional(id: string, payload: Partial<{
   services_ids: string[]
   is_active: boolean
 }>): Promise<void> {
-  const supabase = createClient()
-  const { error } = await supabase
-    .from("professionals")
-    .update({ ...payload, updated_at: new Date().toISOString() })
-    .eq("id", id)
-  if (error) throw error
-}
-
-export async function updateProfile(userId: string, payload: Partial<{
-  full_name: string
-  email: string
-  phone: string
-  role: string
-}>): Promise<void> {
-  const supabase = createClient()
-  const { error } = await supabase
-    .from("profiles")
-    .update({ ...payload, updated_at: new Date().toISOString() })
-    .eq("id", userId)
-  if (error) throw error
+  const res = await fetch(`/api/professionals/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ professional: payload }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error ?? "Error al actualizar")
+  }
 }
 
 export async function saveSchedule(professionalId: string, days: ScheduleDay[]): Promise<void> {
-  const supabase = createClient()
-  await supabase.from("professional_availability").delete().eq("professional_id", professionalId)
-  const active = days.filter(d => d.is_active)
-  if (active.length === 0) return
-  const { error } = await supabase.from("professional_availability").insert(
-    active.map(d => ({
-      professional_id: professionalId,
-      day_of_week: d.day_of_week,
-      start_time: d.start_time,
-      end_time: d.end_time,
-      slot_duration_minutes: d.slot_duration_minutes,
-      is_active: true,
-    }))
-  )
-  if (error) throw error
+  const res = await fetch(`/api/professionals/${professionalId}/schedule`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ schedule: days }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error ?? "Error al guardar horario")
+  }
 }
 
 export async function getAvailableUsers(): Promise<{ id: string; full_name: string; email?: string; role: string }[]> {

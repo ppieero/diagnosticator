@@ -1,9 +1,10 @@
 "use client"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { createAppointment, getServices, getOrCreateProfessional } from "@/lib/services/appointments"
+import { createAppointment, getServices } from "@/lib/services/appointments"
 import { getAvailableSlots } from "@/lib/services/availability"
+import { useCurrency } from "@/hooks/useCurrency"
 import type { Patient, Specialty } from "@/types/domain"
 import { cn } from "@/lib/utils"
 
@@ -12,17 +13,24 @@ interface Service {
   specialty_id: string; specialty?: { id: string; name: string; color: string }
 }
 
-export default function NuevaCitaPage() {
+interface ProfessionalOption {
+  id: string; name: string; color: string
+}
+
+function NuevaCitaContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { price } = useCurrency()
   const [patients, setPatients] = useState<Patient[]>([])
   const [specialties, setSpecialties] = useState<Specialty[]>([])
   const [services, setServices] = useState<Service[]>([])
+  const [professionals, setProfessionals] = useState<ProfessionalOption[]>([])
   const [userId, setUserId] = useState("")
   const [professionalId, setProfessionalId] = useState("")
   const [selectedPatient, setSelectedPatient] = useState(searchParams.get("patient_id") ?? "")
   const [selectedSpecialty, setSelectedSpecialty] = useState("")
   const [selectedService, setSelectedService] = useState("")
+  const [selectedProfessional, setSelectedProfessional] = useState("")
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
   const [selectedTime, setSelectedTime] = useState("")
   const [chiefComplaint, setChiefComplaint] = useState("")
@@ -51,10 +59,25 @@ export default function NuevaCitaPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedSpecialty) { setServices([]); return }
-    getServices(selectedSpecialty).then(data => {
-      setServices(data as Service[])
+    if (!selectedSpecialty) { setServices([]); setProfessionals([]); return }
+    const supabase = createClient()
+    Promise.all([
+      getServices(selectedSpecialty),
+      supabase
+        .from("professionals")
+        .select("id, color, profile:profiles(full_name)")
+        .eq("specialty_id", selectedSpecialty)
+        .eq("is_active", true),
+    ]).then(([svcData, profRes]) => {
+      setServices(svcData as Service[])
       setSelectedService("")
+      const profs = (profRes.data ?? []).map((p: { id: string; color: string; profile: { full_name: string } | null }) => ({
+        id: p.id,
+        color: p.color,
+        name: (p.profile as unknown as { full_name: string } | null)?.full_name ?? "Sin nombre",
+      }))
+      setProfessionals(profs)
+      setSelectedProfessional(profs.length === 1 ? profs[0].id : "")
     })
   }, [selectedSpecialty])
 
@@ -71,11 +94,8 @@ export default function NuevaCitaPage() {
   }, [professionalId, selectedDate])
 
   async function goToStep3() {
-    if (!selectedSpecialty || !selectedService) return
-    const supabase = createClient()
-    const { data: specs } = await supabase.from("specialties").select("id").eq("id", selectedSpecialty).single()
-    const profId = await getOrCreateProfessional(userId, specs?.id ?? selectedSpecialty)
-    setProfessionalId(profId)
+    if (!selectedSpecialty || !selectedService || !selectedProfessional) return
+    setProfessionalId(selectedProfessional)
     setStep(3)
   }
 
@@ -178,6 +198,21 @@ export default function NuevaCitaPage() {
               </button>
             ))}
           </div>
+          {professionals.length > 1 && (
+            <>
+              <p className="text-sm font-semibold text-gray-700">Profesional</p>
+              <div className="flex flex-col gap-2">
+                {professionals.map(pr => (
+                  <button key={pr.id} type="button" onClick={() => setSelectedProfessional(pr.id)}
+                    className={cn("flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
+                      selectedProfessional === pr.id ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: pr.color }} />
+                    <span className={cn("text-sm font-medium", selectedProfessional === pr.id ? "text-blue-900" : "text-gray-700")}>{pr.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           {services.length > 0 && (
             <>
               <p className="text-sm font-semibold text-gray-700">Servicio</p>
@@ -190,13 +225,13 @@ export default function NuevaCitaPage() {
                       <p className={cn("text-sm font-medium", selectedService === sv.id ? "text-blue-900" : "text-gray-800")}>{sv.name}</p>
                       <p className="text-xs text-gray-400">{sv.duration_minutes} min</p>
                     </div>
-                    <p className="text-sm font-semibold text-gray-700">€{sv.price}</p>
+                    <p className="text-sm font-semibold text-gray-700">{price(sv.price)}</p>
                   </button>
                 ))}
               </div>
             </>
           )}
-          <button onClick={goToStep3} disabled={!selectedSpecialty || !selectedService}
+          <button onClick={goToStep3} disabled={!selectedSpecialty || !selectedService || !selectedProfessional}
             className="tap-target w-full rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
             Siguiente →
           </button>
@@ -284,5 +319,13 @@ export default function NuevaCitaPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function NuevaCitaPage() {
+  return (
+    <Suspense fallback={<div className="px-4 py-5">Cargando...</div>}>
+      <NuevaCitaContent />
+    </Suspense>
   )
 }

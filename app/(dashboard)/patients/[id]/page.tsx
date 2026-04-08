@@ -92,10 +92,10 @@ export default function PatientPage() {
           + Nueva consulta
         </button>
         <button
-          onClick={() => router.push(`/patients/${id}/evaluations`)}
+          onClick={() => router.push(`/patients/${id}/edit`)}
           className="tap-target px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          Ver todas
+          Editar
         </button>
       </div>
       <button

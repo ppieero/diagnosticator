@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { createProduct, updateProduct } from "@/lib/services/products"
 import type { Product } from "@/lib/services/products"
+import { useCurrency } from "@/hooks/useCurrency"
 import { cn } from "@/lib/utils"
 
 const TAX_RATES = [0, 4, 10, 21]
@@ -13,6 +14,7 @@ interface Props { product?: Product }
 
 export default function ProductForm({ product }: Props) {
   const router = useRouter()
+  const { symbol } = useCurrency()
   const [services, setServices] = useState<ServiceOption[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +99,7 @@ export default function ProductForm({ product }: Props) {
       <div className="card p-4 flex flex-col gap-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Precio e impuestos</p>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Precio base (€)</label>
+          <label className="text-xs text-gray-500 font-medium block mb-1">Precio base ({symbol})</label>
           <input type="number" value={price} onChange={e => setPrice(e.target.value)}
             placeholder="0.00" step="0.01" className="input-base" />
         </div>
@@ -118,8 +120,8 @@ export default function ProductForm({ product }: Props) {
         {priceWithTax && (
           <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <p className="text-xs text-green-800">
-              Precio con IVA: <span className="font-bold">€{priceWithTax}</span>
-              {" "}(IVA incluido: €{(parseFloat(price) * taxRate / 100).toFixed(2)})
+              Precio con IVA: <span className="font-bold">{symbol}{priceWithTax}</span>
+              {" "}(IVA incluido: {symbol}{(parseFloat(price) * taxRate / 100).toFixed(2)})
             </p>
           </div>
         )}

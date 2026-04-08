@@ -125,7 +125,7 @@ export default function ServiciosPage() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-gray-900">{price(sv.price)}</p>
                     {sv.session_count > 1 && sv.package_price && (
-                      <p className="text-xs text-purple-600 font-medium">€{Number(sv.package_price).toFixed(0)} pack</p>
+                      <p className="text-xs text-purple-600 font-medium">{price(sv.package_price)} pack</p>
                     )}
                     <span className={cn("text-xs font-medium px-2 py-0.5 rounded-lg mt-1 inline-block",
                       sv.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
