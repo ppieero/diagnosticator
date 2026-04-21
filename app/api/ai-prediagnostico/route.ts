@@ -5,149 +5,75 @@ const client = new Anthropic()
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const {
-      patient,
-      anamnesis,
-      evaluation,
-      formResponses,
-      specialty,
-    } = body
+    const { patient, anamnesis, profile, evaluation, specialty } = await req.json()
 
-    const edad = patient?.birth_date
-      ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31557600000)
-      : null
+    const context = `
+PACIENTE:
+- Sexo: ${patient?.biological_sex === "male" ? "Masculino" : patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
+- Fecha nacimiento: ${patient?.birth_date ?? "No especificada"}
 
-    const imc = anamnesis?.height_cm && anamnesis?.weight_kg
-      ? (anamnesis.weight_kg / Math.pow(anamnesis.height_cm / 100, 2)).toFixed(1)
-      : null
+ANAMNESIS (último registro):
+- Motivo: ${anamnesis?.main_complaint ?? "No especificado"}
+- Embarazo: ${anamnesis?.pregnancy_status ?? "No aplica"}
+- Actividad: ${anamnesis?.activity_level ?? "No especificado"}
+- Estrés: ${anamnesis?.stress_level !== undefined ? `${anamnesis.stress_level}/10` : "No especificado"}
+- Energía: ${anamnesis?.energy_level !== undefined ? `${anamnesis.energy_level}/10` : "No especificado"}
+- Sueño: ${anamnesis?.sleep_quality ?? "No especificado"} · ${anamnesis?.sleep_hours ?? "?"} horas
+- Ánimo: ${anamnesis?.today_mood ?? "No especificado"}
+- Antecedentes: ${Array.isArray(anamnesis?.personal_history_snapshot) ? (anamnesis.personal_history_snapshot as string[]).join(", ") : "Ninguno"}
 
-    const alergias = (anamnesis?.known_allergies ?? [])
-      .map((a: { substance: string; severity: string; reaction?: string }) =>
-        `${a.substance} (${a.severity}${a.reaction ? `, reacción: ${a.reaction}` : ""})`)
-      .join(", ") || "Ninguna referida"
+EVALUACIÓN FISIOTERAPÉUTICA:
+- Motivo consulta: ${evaluation?.main_complaint ?? evaluation?.motivo ?? "No especificado"}
+- Dolor EVA: ${evaluation?.pain_scale ?? "No especificado"}
+- Tipo dolor: ${Array.isArray(evaluation?.pain_type) ? (evaluation.pain_type as string[]).join(", ") : evaluation?.pain_type ?? "No especificado"}
+- Patrón dolor: ${evaluation?.pain_pattern ?? "No especificado"}
+- Factores agravan: ${evaluation?.pain_aggravating ?? "No especificado"}
+- Factores alivian: ${evaluation?.pain_relieving ?? "No especificado"}
+- Postura ant.: ${Array.isArray(evaluation?.postural_view_anterior) ? (evaluation.postural_view_anterior as string[]).join(", ") : "No especificado"}
+- Postura lat.: ${Array.isArray(evaluation?.postural_view_lateral) ? (evaluation.postural_view_lateral as string[]).join(", ") : "No especificado"}
+- Tests realizados: ${Array.isArray(evaluation?.tests_performed) ? (evaluation.tests_performed as string[]).join(", ") : "No especificado"}
+- Resultados tests: ${evaluation?.tests_results ?? "No especificado"}
+- Impresión clínica: ${evaluation?.clinical_impression ?? "No especificada"}
+- Diagnóstico funcional: ${evaluation?.functional_diagnosis ?? "No especificado"}
+- Pronóstico: ${evaluation?.prognosis ?? "No especificado"}
 
-    const medicacion = (anamnesis?.active_medications ?? [])
-      .map((m: { name: string; dose?: string; frequency?: string }) =>
-        `${m.name}${m.dose ? ` ${m.dose}` : ""}${m.frequency ? ` ${m.frequency}` : ""}`)
-      .join(", ") || "Ninguna"
-
-    const antecedentes = (anamnesis?.personal_history ?? [])
-      .map((h: { condition: string; status: string; diagnosed_year?: number }) =>
-        `${h.condition} (${h.status}${h.diagnosed_year ? `, desde ${h.diagnosed_year}` : ""})`)
-      .join(", ") || "Sin antecedentes relevantes"
-
-    const antFamiliares = (anamnesis?.family_history ?? [])
-      .map((f: { condition: string; relationship: string }) =>
-        `${f.condition} (${f.relationship})`)
-      .join(", ") || "Sin antecedentes familiares relevantes"
-
-    const sintomasActuales = (anamnesis?.current_symptoms ?? []).join(", ") || "No referidos"
-
-    const hallazgos = (formResponses ?? []).map((fr: {
-      template_name?: string
-      answers: Record<string, unknown>
-      computed_scores?: Record<string, number>
-    }) => {
-      const scores = fr.computed_scores
-        ? Object.entries(fr.computed_scores)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ")
-        : ""
-      const answersText = Object.entries(fr.answers ?? {})
-        .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
-        .slice(0, 30)
-        .map(([k, v]) => {
-          if (Array.isArray(v)) return `${k}: ${v.join(", ")}`
-          if (typeof v === "object") return `${k}: ${JSON.stringify(v)}`
-          return `${k}: ${v}`
-        })
-        .join("\n")
-      return `--- ${fr.template_name ?? "Formulario"} ---\n${answersText}${scores ? `\nScores: ${scores}` : ""}`
-    }).join("\n\n")
-
-    const prompt = `Eres un asistente clínico especializado en ${specialty ?? "medicina"}, con formación en medicina basada en evidencia. Tu función es analizar datos clínicos de un paciente y proporcionar un prediagnóstico diferencial fundamentado científicamente, con sugerencias clínicas útiles para el profesional de salud.
-
-IMPORTANTE: Este análisis es un APOYO AL PROFESIONAL, no reemplaza el juicio clínico. Debe estar basado en evidencia científica actual.
-
-═══════════════════════════════════════════
-DATOS DEL PACIENTE
-═══════════════════════════════════════════
-Edad: ${edad ? `${edad} años` : "No especificada"}
-Sexo biológico: ${patient?.biological_sex === "male" ? "Masculino" : patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
-${imc ? `Talla/Peso/IMC: ${anamnesis.height_cm}cm / ${anamnesis.weight_kg}kg / IMC ${imc}` : ""}
-${anamnesis?.pregnancy_status && anamnesis.pregnancy_status !== "not_applicable" ? `Estado de embarazo: ${anamnesis.pregnancy_status}` : ""}
-
-═══════════════════════════════════════════
-ANAMNESIS
-═══════════════════════════════════════════
-Motivo de consulta: ${anamnesis?.main_complaint ?? evaluation?.notes ?? "No especificado"}
-Síntomas actuales: ${sintomasActuales}
-Tabaquismo: ${anamnesis?.smoking_status ?? "No especificado"}
-Alcohol: ${anamnesis?.alcohol_status ?? "No especificado"}
-
-Alergias: ${alergias}
-Medicación actual: ${medicacion}
-Antecedentes personales: ${antecedentes}
-Antecedentes familiares: ${antFamiliares}
-
-═══════════════════════════════════════════
-HALLAZGOS DE LA EVALUACIÓN — ${specialty ?? ""}
-═══════════════════════════════════════════
-${hallazgos || "Sin datos de formularios disponibles"}
-
-═══════════════════════════════════════════
-INSTRUCCIONES
-═══════════════════════════════════════════
-Analiza todos los datos anteriores y proporciona:
-
-1. DIAGNÓSTICO DIFERENCIAL (máximo 3 opciones, ordenadas por probabilidad)
-   Para cada uno incluye:
-   - Nombre completo y código CIE-10
-   - Probabilidad estimada (Alta/Media/Baja)
-   - Hallazgos que lo sustentan
-   - Hallazgos que lo contraindican
-   - Referencia bibliográfica o guía clínica que lo respalda
-
-2. DIAGNÓSTICO MÁS PROBABLE
-   - Nombre y código CIE-10
-   - Nivel de severidad sugerido (leve/moderado/severo/crítico)
-   - Justificación clínica basada en los hallazgos
-
-3. ESTUDIOS COMPLEMENTARIOS SUGERIDOS
-   - Lista de exámenes o pruebas que confirmarían o descartarían el diagnóstico
-   - Prioridad de cada uno (urgente/electivo)
-
-4. ALERTAS CLÍNICAS
-   - Signos de alarma identificados que requieren atención inmediata
-   - Interacciones farmacológicas relevantes con medicación actual
-   - Contraindicaciones importantes para el tratamiento
-
-5. SUGERENCIAS DE TRATAMIENTO
-   - Enfoque terapéutico recomendado basado en guías clínicas
-   - Técnicas específicas para ${specialty ?? "esta especialidad"}
-   - Objetivos medibles a corto (2 semanas) y mediano plazo (6-8 semanas)
-
-6. PRONÓSTICO
-   - Expectativa de evolución con tratamiento adecuado
-   - Factores pronósticos favorables y desfavorables identificados
-
-Responde en español, de forma estructurada con los títulos numerados. Usa terminología clínica precisa pero también lenguaje comprensible. Basa cada afirmación en evidencia científica actual (menciona cuando aplique guías como GPC, Cochrane, UpToDate, etc.).`
+ESPECIALIDAD: ${specialty ?? "fisioterapia"}
+`.trim()
 
     const message = await client.messages.create({
       model: "claude-opus-4-5",
-      max_tokens: 2000,
-      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Eres un fisioterapeuta clínico experto. Basándote en la siguiente evaluación completa, genera un pre-diagnóstico y plan de tratamiento.
+
+${context}
+
+Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta, sin texto adicional:
+{
+  "functional_diagnosis": "Diagnóstico funcional fisioterapéutico específico y preciso",
+  "treatment_plan": ["Técnica o intervención 1", "Técnica 2", "Técnica 3"],
+  "sessions_recommended": 10,
+  "frequency": "2x semana",
+  "alerts": ["alerta clínica si aplica, sino array vacío"]
+}
+
+Reglas:
+- functional_diagnosis: diagnóstico funcional fisioterapéutico, no médico. Específico con la región y tipo de disfunción
+- treatment_plan: 4-6 intervenciones ordenadas por importancia
+- sessions_recommended: número entero realista (6-20)
+- frequency: formato corto (ej: "2x semana", "3x semana", "1x semana")
+- alerts: solo si hay señales de alarma reales
+- Responder en español`
+      }]
     })
 
-    const text = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map(b => b.text)
-      .join("")
-
-    return NextResponse.json({ prediagnostico: text })
-  } catch (err) {
-    console.error("ai-prediagnostico error:", err)
-    return NextResponse.json({ error: "Error al generar el prediagnóstico" }, { status: 500 })
+    const text = message.content[0].type === "text" ? message.content[0].text : ""
+    const clean = text.replace(/```json|```/g, "").trim()
+    const parsed = JSON.parse(clean)
+    return NextResponse.json(parsed)
+  } catch (e) {
+    console.error("AI prediag error:", e)
+    return NextResponse.json({ error: "Error generando pre-diagnóstico" }, { status: 500 })
   }
 }

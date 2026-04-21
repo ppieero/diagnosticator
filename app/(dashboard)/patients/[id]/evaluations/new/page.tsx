@@ -300,7 +300,16 @@ export default function NewEvaluationPage() {
           {selectedEpisode.planType && <p className="text-xs text-green-600">{PLAN_LABELS[selectedEpisode.planType]} · {selectedEpisode.sessionsUsed}/{selectedEpisode.totalSessions} ses.</p>}
         </div>
       )}
-      <FormEngine template={template} onSave={handleSave} onComplete={handleComplete}/>
+      <FormEngine
+        template={template}
+        onSave={handleSave}
+        onComplete={handleComplete}
+        clinicalContext={{
+          patientSex: patient?.biological_sex,
+          patientBirthDate: (patient as Record<string,unknown>)?.birth_date as string,
+          anamnesisSnapshot: snapshot as unknown as Record<string,unknown>,
+        }}
+      />
     </div>
   )
 
@@ -508,7 +517,6 @@ export default function NewEvaluationPage() {
           </div>
         )}
       </div>
-
       {/* SNAPSHOT — 10 secciones completas */}
       {(() => {
         const snapSecs = [
