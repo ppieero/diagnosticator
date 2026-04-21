@@ -500,7 +500,12 @@ export default function AnamnesisPage() {
                 <p className="text-xs text-gray-400 mb-1">{f.label}</p>
                 <div className="flex gap-1.5 flex-wrap">
                   {f.opts.map(([v,l])=>(
-                    <button key={v} type="button" onClick={()=>{setProfile(p=>({...p,[f.field]:v}));setTimeout(saveHabits,100)}}
+                    <button key={v} type="button" onClick={async()=>{
+                      const updated = {...profile,[f.field]:v}
+                      setProfile(updated)
+                      await upsertAnamnesisProfile({...updated,patient_id:patientId,known_allergies:allergies,active_medications:meds,personal_history:personal,family_history:family})
+                      showSaved("Guardado")
+                    }}
                       className={cn("px-2.5 py-1.5 rounded-full text-xs font-medium border transition-all",
                         (profile as Record<string,string>)[f.field]===v?"bg-blue-50 border-blue-500 text-blue-800 border-[1.5px]":"border-gray-200 text-gray-600")}>
                       {l}

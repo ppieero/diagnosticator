@@ -1,5 +1,5 @@
 "use client"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import type { FormTemplateConfig, FormSectionConfig } from "@/types/domain"
 import { SectionRenderer } from "./SectionRenderer"
 import { computeScore } from "./form-utils"
@@ -19,6 +19,15 @@ export function FormEngine({
 }: FormEngineProps) {
   const [answers, setAnswers] = useState<Record<string, unknown>>(initialAnswers)
   const [openSection, setOpenSection] = useState<string>(template.sections[0]?.id ?? "")
+
+  // Re-sincronizar cuando llegan respuestas guardadas de forma asíncrona
+  const initialAnswersRef = useState(initialAnswers)[0]
+  useEffect(() => {
+    if (initialAnswers && Object.keys(initialAnswers).length > 0) {
+      setAnswers(initialAnswers)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(initialAnswers)])
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
