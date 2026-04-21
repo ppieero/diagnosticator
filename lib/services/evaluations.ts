@@ -27,9 +27,11 @@ export async function createEvaluation(payload: {
   patient_id: string
   specialty_id: string
   professional_id: string
+  performed_by?: string
   encounter_type: "initial" | "session" | "followup"
   evaluation_type_id: string
   chief_complaint?: string
+  appointment_id?: string
 }): Promise<Evaluation> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -38,12 +40,13 @@ export async function createEvaluation(payload: {
       patient_id: payload.patient_id,
       specialty_id: payload.specialty_id,
       professional_id: payload.professional_id,
-      performed_by: payload.professional_id,
+      performed_by: payload.performed_by ?? payload.professional_id,
       encounter_type: payload.encounter_type,
       evaluation_type_id: payload.evaluation_type_id,
       notes: payload.chief_complaint ?? null,
       status: "in_progress",
       started_at: new Date().toISOString(),
+      ...(payload.appointment_id ? { appointment_id: payload.appointment_id } : {}),
     })
     .select()
     .single()
@@ -65,6 +68,20 @@ export async function completeEvaluation(id: string): Promise<void> {
     })
     .eq("id", id)
   if (error) throw error
+
+  // Actualizar la cita asociada a completed
+  const { data: ev } = await supabase
+    .from("evaluations")
+    .select("appointment_id")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (ev?.appointment_id) {
+    await supabase
+      .from("appointments")
+      .update({ status: "completed" })
+      .eq("id", ev.appointment_id)
+  }
 }
 
 export async function getTemplateBySpecialtyAndType(
@@ -111,7 +128,7 @@ export async function saveFormResponse(payload: {
     .select("id")
     .eq("encounter_id", payload.encounter_id)
     .eq("template_id", payload.template_id)
-    .single()
+    .maybeSingle()
 
   if (existing.data?.id) {
     await supabase
@@ -155,6 +172,6 @@ export async function getFormResponse(encounterId: string, templateId: string) {
     .select("*")
     .eq("encounter_id", encounterId)
     .eq("template_id", templateId)
-    .single()
+    .maybeSingle()
   return data
 }

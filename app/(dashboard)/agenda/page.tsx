@@ -64,10 +64,10 @@ export default function AgendaPage() {
 
     const from = view === "grid"
       ? new Date(selectedDay.toISOString().split("T")[0] + "T00:00:00").toISOString()
-      : weekDates[0].toISOString()
+      : new Date(new Date().toISOString().split("T")[0] + "T00:00:00").toISOString()
     const toDate = view === "grid"
       ? new Date(selectedDay.toISOString().split("T")[0] + "T23:59:59").toISOString()
-      : (() => { const t = new Date(weekDates[6]); t.setHours(23,59,59); return t.toISOString() })()
+      : (() => { const t = new Date(); t.setDate(t.getDate() + 60); t.setHours(23,59,59); return t.toISOString() })()
 
     const [appsData, profsData] = await Promise.all([
       getAppointmentsByDateRange(from, toDate),
@@ -134,15 +134,19 @@ export default function AgendaPage() {
     })
   }
 
-  async function handleIniciarConsulta(appointmentId: string) {
-    setStartingConsulta(true)
-    try {
-      const { encounterId, patientId } = await initConsulta(appointmentId)
-      router.push(`/patients/${patientId}/evaluations/${encounterId}`)
-    } catch (err) {
-      console.error("Error iniciando consulta:", err)
-      setStartingConsulta(false)
-    }
+  function handleIniciarConsulta(appointmentId: string) {
+    // Buscar el appointment para obtener patient_id y specialty_id
+    const appt = appointments.find(a => a.id === appointmentId)
+    if (!appt) return
+    const patientId = appt.patient_id
+    const specialtyId = appt.specialty_id ?? ""
+    const serviceId = appt.service_id ?? ""
+    const params = new URLSearchParams({
+      appointment_id: appointmentId,
+      specialty_id: specialtyId,
+      service_id: serviceId,
+    })
+    router.push(`/patients/${patientId}/evaluations/new?${params.toString()}`)
   }
 
   async function handleStatusChange(id: string, status: "confirmed" | "cancelled" | "no_show" | "completed") {

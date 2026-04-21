@@ -346,6 +346,10 @@ export default function PatientDetailPage() {
           className="tap-target rounded-xl bg-blue-600 text-white text-xs font-semibold">
           + Nueva cita
         </button>
+        <button onClick={() => router.push(`/patients/${id}/anamnesis`)}
+          className="tap-target rounded-xl border border-gray-300 text-gray-700 text-xs font-medium col-span-2">
+          Ver anamnesis completa
+        </button>
         <button onClick={() => router.push(`/pagos/nuevo?patient_id=${id}`)}
           className="tap-target rounded-xl border border-gray-300 text-gray-700 text-xs font-medium">
           Registrar pago
