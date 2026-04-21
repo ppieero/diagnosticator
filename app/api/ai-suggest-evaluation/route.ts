@@ -1,128 +1,68 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
-import { createClient } from "@/lib/supabase/server"
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const client = new Anthropic()
 
-interface TemplateOption {
-  id: string
-  name: string
-  form_type: string
-  description?: string
-}
-
-interface AiSuggestRequest {
-  motivo: string
-  eva: number
-  specialty_id: string
-  specialty_name: string
-  patient_id: string
-  available_templates: TemplateOption[]
-}
-
-interface AiSuggestResponse {
-  suggested_template_id: string
-  reasoning: string
-  confidence: number
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
+    const { patient, anamnesis, evaluation_type, specialty } = await req.json()
 
-    const body: AiSuggestRequest = await request.json()
-    const { motivo, eva, specialty_name, available_templates } = body
+    const context = `
+PACIENTE:
+- Sexo biológico: ${patient?.biological_sex === "male" ? "Masculino" : patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
+- Fecha nacimiento: ${patient?.birth_date ?? "No especificada"}
 
-    if (!motivo?.trim() || available_templates.length === 0) {
-      return NextResponse.json({ error: "Datos insuficientes" }, { status: 400 })
-    }
+ANAMNESIS (último registro):
+- Motivo de consulta: ${anamnesis?.main_complaint ?? "No especificado"}
+- Embarazo: ${anamnesis?.pregnancy_status ?? "No aplica"}
+- Nivel de actividad: ${anamnesis?.activity_level ?? "No especificado"}
+- Nivel de estrés: ${anamnesis?.stress_level !== undefined ? `${anamnesis.stress_level}/10` : "No especificado"}
+- Nivel de energía: ${anamnesis?.energy_level !== undefined ? `${anamnesis.energy_level}/10` : "No especificado"}
+- Calidad de sueño: ${anamnesis?.sleep_quality ?? "No especificado"} · ${anamnesis?.sleep_hours ?? "?"} horas
+- Dieta: ${anamnesis?.diet_type ?? "No especificada"}
+- Ánimo: ${anamnesis?.today_mood ?? "No especificado"}
+- Otros antecedentes: ${anamnesis?.other_history ?? "Ninguno"}
+- Antecedentes personales: ${Array.isArray(anamnesis?.personal_history_snapshot) ? (anamnesis.personal_history_snapshot as string[]).join(", ") : "Ninguno"}
 
-    const painLevel =
-      eva <= 3 ? "leve" : eva <= 6 ? "moderado" : "severo/intenso"
+TIPO DE EVALUACIÓN: ${evaluation_type ?? "inicial"}
+ESPECIALIDAD: ${specialty ?? "fisioterapia"}
+`.trim()
 
-    const templateList = available_templates
-      .map(
-        (t, i) =>
-          `${i + 1}. ID: "${t.id}" | Nombre: "${t.name}" | Tipo: ${t.form_type}${t.description ? ` | Descripción: ${t.description}` : ""}`
-      )
-      .join("\n")
+    const message = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Eres un asistente clínico especializado en fisioterapia. Basándote en el siguiente contexto clínico, sugiere qué evaluaciones y tests se deben realizar en esta consulta.
 
-    const prompt = `Eres un asistente clínico experto en ${specialty_name}. Tu rol es ayudar al profesional a elegir el formulario de evaluación más apropiado para la consulta.
+${context}
 
-DATOS DE LA CONSULTA:
-- Motivo de consulta: ${motivo}
-- Escala EVA de dolor: ${eva}/10 (${painLevel})
-
-FORMULARIOS DISPONIBLES:
-${templateList}
-
-INSTRUCCIONES:
-Analiza el motivo de consulta y el nivel de dolor EVA. Selecciona el formulario más apropiado para evaluar correctamente a este paciente según su presentación clínica.
-
-Responde ÚNICAMENTE en JSON con esta estructura exacta (sin texto adicional):
+Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta, sin texto adicional:
 {
-  "suggested_template_id": "id_del_formulario_seleccionado",
-  "reasoning": "Explicación clínica de 2-3 oraciones sobre por qué este formulario es el más adecuado para el motivo y nivel de dolor indicado.",
-  "confidence": 0.85
+  "impression": "Párrafo corto con impresión clínica y hipótesis diagnóstica basada en los datos",
+  "priority_tests": [
+    {"name": "Nombre del test", "reason": "Por qué realizarlo", "priority": "high|medium|low"}
+  ],
+  "treatment_focus": ["técnica o enfoque 1", "técnica 2"],
+  "alerts": ["alerta clínica si aplica"]
 }
 
-Si ningún formulario es específicamente adecuado, sugiere el más genérico disponible y explícalo.`
-
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 500,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+Reglas:
+- priority_tests: máximo 6 tests, ordenados de mayor a menor prioridad
+- treatment_focus: máximo 6 chips cortos
+- alerts: solo incluir si hay señales de alerta reales (dolor severo, contraindicaciones, derivación urgente)
+- Si hay poco contexto clínico, basar sugerencias en la especialidad y tipo de evaluación
+- Responder en español`
+      }]
     })
 
-    const rawResponse =
-      message.content[0].type === "text" ? message.content[0].text : ""
+    const text = message.content[0].type === "text" ? message.content[0].text : ""
+    const clean = text.replace(/```json|```/g, "").trim()
+    const parsed = JSON.parse(clean)
 
-    let result: AiSuggestResponse = {
-      suggested_template_id: available_templates[0].id,
-      reasoning: "Formulario seleccionado por defecto.",
-      confidence: 0.5,
-    }
-
-    try {
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]) as AiSuggestResponse
-        result = parsed
-      }
-    } catch {
-      // Keep default on parse error
-    }
-
-    // Validate suggested_template_id is in available_templates
-    const isValid = available_templates.some(
-      (t) => t.id === result.suggested_template_id
-    )
-    if (!isValid) {
-      result.suggested_template_id = available_templates[0].id
-      result.reasoning =
-        "No se pudo identificar un formulario específico. Se sugiere el primero disponible."
-      result.confidence = 0.4
-    }
-
-    return NextResponse.json(result)
-  } catch (err) {
-    console.error("AI suggest evaluation error:", err)
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    )
+    return NextResponse.json(parsed)
+  } catch (e) {
+    console.error("AI suggest error:", e)
+    return NextResponse.json({ error: "Error generando sugerencia" }, { status: 500 })
   }
 }
