@@ -92,7 +92,7 @@ export default function DiagnosticoPage() {
       const { data: { user } } = await supabase.auth.getUser()
 
       const [evRes, patRes, anamRes, frRes, spRes] = await Promise.all([
-        supabase.from("evaluations").select("*, specialty:specialties(name)").eq("id", eid).single(),
+        supabase.from("evaluations").select("*").eq("id", eid).single(),
         supabase.from("patients").select("*").eq("id", patientId).single(),
         supabase.from("anamnesis").select("*").eq("patient_id", patientId).maybeSingle(),
         supabase.from("form_responses").select("*, template:specialty_form_templates(name)").eq("encounter_id", eid),

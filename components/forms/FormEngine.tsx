@@ -296,7 +296,7 @@ export function FormEngine({
             Siguiente sección
           </button>
         )}
-        {showCompleteButton && onComplete && completedCount === template.sections.length && !disabled && (
+        {showCompleteButton && onComplete && allRequiredComplete && !disabled && (
           <div className="w-full flex flex-col gap-3">
             <div className="border border-purple-200 rounded-2xl overflow-hidden">
               <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
