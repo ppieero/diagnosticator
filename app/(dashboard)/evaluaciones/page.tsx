@@ -15,6 +15,7 @@ const FORM_TYPE_LABELS: Record<string, string> = {
 const FIELD_TYPE_ICONS: Record<string, string> = {
   textarea: "📝", select: "▾", multiselect: "☑", scale_0_10: "📊",
   body_map: "🫀", repeating_group: "↕", radio: "◎", switch: "⇌",
+  postural_assessment: "⊞", palpation: "✋",
   text: "T", range_of_motion: "⟳",
 }
 

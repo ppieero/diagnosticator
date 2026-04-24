@@ -9,6 +9,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   textarea: "Texto largo", select: "Seleccion unica", multiselect: "Seleccion multiple",
   scale_0_10: "Escala 0-10", body_map: "Mapa corporal", repeating_group: "Grupo repetible",
   radio: "Radio", switch: "Interruptor", text: "Texto corto", range_of_motion: "Rango de movimiento",
+  postural_assessment: "Evaluación postural", palpation: "Palpación musculoesquelética",
 }
 
 export default function EvaluacionDetailPage() {
