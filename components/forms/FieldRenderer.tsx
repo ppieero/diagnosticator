@@ -1,6 +1,7 @@
 "use client"
 import type { FormFieldConfig, BodyMapMarker } from "@/types/domain"
 import { PosturalAssessmentField } from "./fields/PosturalAssessmentField"
+import { PalpationField } from "./fields/PalpationField"
 import { evaluateConditions, evaluateClinicalAlert } from "./form-utils"
 import { Scale0To10 } from "./fields/Scale0To10"
 import { RepeatingGroup } from "./fields/RepeatingGroup"
@@ -325,6 +326,14 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
     case "postural_assessment":
       return (
         <PosturalAssessmentField
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      )
+    case "palpation":
+      return (
+        <PalpationField
           value={value}
           onChange={onChange}
           disabled={disabled}
