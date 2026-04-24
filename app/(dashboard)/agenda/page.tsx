@@ -64,7 +64,7 @@ export default function AgendaPage() {
 
     const from = view === "grid"
       ? new Date(selectedDay.toISOString().split("T")[0] + "T00:00:00").toISOString()
-      : new Date(new Date().toISOString().split("T")[0] + "T00:00:00").toISOString()
+      : (() => { const t = new Date(); t.setDate(t.getDate() - 90); t.setHours(0,0,0,0); return t.toISOString() })()
     const toDate = view === "grid"
       ? new Date(selectedDay.toISOString().split("T")[0] + "T23:59:59").toISOString()
       : (() => { const t = new Date(); t.setDate(t.getDate() + 60); t.setHours(23,59,59); return t.toISOString() })()
@@ -236,65 +236,111 @@ export default function AgendaPage() {
       {/* VISTA LISTA */}
       {view === "list" && (
         <div className="flex-1 overflow-y-auto px-4 py-2">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-gray-700">
-              {DAYS_ES[selectedDay.getDay()]}, {selectedDay.getDate()} de {MONTHS_ES[selectedDay.getMonth()]}
-            </p>
-            <span className="text-xs text-gray-400">
-              {getAppsForDay(selectedDay).length} cita{getAppsForDay(selectedDay).length !== 1 ? "s" : ""}
-            </span>
-          </div>
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="w-7 h-7 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
             </div>
           )}
-          {!loading && getAppsForDay(selectedDay).length === 0 && (
+          {!loading && appointments.length === 0 && (
             <div className="flex flex-col items-center py-16 gap-3">
               <span className="text-4xl">📅</span>
-              <p className="text-sm font-medium text-gray-500">Sin citas para este dia</p>
+              <p className="text-sm font-medium text-gray-500">Sin citas en este período</p>
               <button onClick={() => router.push("/agenda/nueva")} className="text-sm text-blue-600 font-medium">
                 Agendar cita
               </button>
             </div>
           )}
-          <div className="flex flex-col gap-3">
-            {getAppsForDay(selectedDay).map(app => {
-              const st = STATUS_CONFIG[app.status] ?? STATUS_CONFIG.scheduled
-              const endTime = new Date(new Date(app.scheduled_at).getTime() + app.duration_minutes * 60000)
-              const slug = (app.specialty as { slug?: string })?.slug ?? ""
-              const sc = SPECIALTY_COLORS[slug] ?? { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" }
-              return (
-                <button key={app.id} onClick={() => setSelectedAppointment(app)}
-                  className={cn("w-full text-left border rounded-2xl p-4 transition-all hover:shadow-md", st.bg, st.border)}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex gap-3">
-                      <div className="flex flex-col items-center text-xs text-gray-500 flex-shrink-0 min-w-[48px]">
-                        <span className="font-semibold text-gray-800">{formatTime(app.scheduled_at)}</span>
-                        <span className="text-gray-400">{formatTime(endTime.toISOString())}</span>
-                      </div>
-                      <div className="w-px bg-gray-200 self-stretch" />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{app.patient?.full_name ?? "Paciente"}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{app.service?.name}</p>
-                        {app.chief_complaint && (
-                          <p className="text-xs text-gray-400 mt-1 truncate max-w-[200px]">{app.chief_complaint}</p>
-                        )}
-                      </div>
+          {!loading && (() => {
+            // Agrupar todas las citas por fecha
+            const today = new Date().toISOString().split("T")[0]
+            const groups: Record<string, AppointmentWithRelations[]> = {}
+            appointments.forEach(a => {
+              const d = a.scheduled_at.split("T")[0]
+              if (!groups[d]) groups[d] = []
+              groups[d].push(a)
+            })
+            const sortedDates = Object.keys(groups).sort()
+            // Separar pasadas y futuras
+            const pastDates = sortedDates.filter(d => d < today).reverse()
+            const todayAndFuture = sortedDates.filter(d => d >= today)
+
+            function renderGroup(dates: string[], isPast: boolean) {
+              return dates.map(dateStr => {
+                const apps = groups[dateStr].sort((a,b) => a.scheduled_at.localeCompare(b.scheduled_at))
+                const d = new Date(dateStr + "T12:00:00")
+                const isToday = dateStr === today
+                return (
+                  <div key={dateStr} className="mb-4">
+                    <div className={cn("flex items-center gap-2 mb-2 sticky top-0 py-1 z-10",
+                      isPast ? "opacity-60" : "")}>
+                      <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
+                        isToday ? "bg-blue-600 text-white" :
+                        isPast ? "bg-gray-100 text-gray-500" :
+                        "bg-gray-100 text-gray-700")}>
+                        {isToday ? "Hoy" : `${DAYS_ES[d.getDay()]}, ${d.getDate()} ${MONTHS_ES[d.getMonth()]}`}
+                      </span>
+                      <span className="text-xs text-gray-400">{apps.length} cita{apps.length !== 1 ? "s" : ""}</span>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className={cn("text-xs font-medium px-2 py-1 rounded-lg", st.bg, st.text)}>{st.label}</span>
-                      {app.specialty && (
-                        <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", sc.bg, sc.text)}>
-                          {(app.specialty as { name: string }).name}
-                        </span>
-                      )}
+                    <div className={cn("flex flex-col gap-2", isPast ? "opacity-70" : "")}>
+                      {apps.map(app => {
+                        const st = STATUS_CONFIG[app.status] ?? STATUS_CONFIG.scheduled
+                        const endTime = new Date(new Date(app.scheduled_at).getTime() + app.duration_minutes * 60000)
+                        const slug = (app.specialty as { slug?: string })?.slug ?? ""
+                        const sc = SPECIALTY_COLORS[slug] ?? { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" }
+                        return (
+                          <button key={app.id} onClick={() => setSelectedAppointment(app)}
+                            className={cn("w-full text-left border rounded-2xl p-4 transition-all hover:shadow-md", st.bg, st.border)}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex gap-3">
+                                <div className="flex flex-col items-center text-xs text-gray-500 flex-shrink-0 min-w-[48px]">
+                                  <span className="font-semibold text-gray-800">{formatTime(app.scheduled_at)}</span>
+                                  <span className="text-gray-400">{formatTime(endTime.toISOString())}</span>
+                                </div>
+                                <div className="w-px bg-gray-200 self-stretch" />
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">{app.patient?.full_name ?? "Paciente"}</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">{app.service?.name}</p>
+                                  {app.chief_complaint && (
+                                    <p className="text-xs text-gray-400 mt-1 truncate max-w-[200px]">{app.chief_complaint}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <span className={cn("text-xs font-medium px-2 py-1 rounded-lg", st.bg, st.text)}>{st.label}</span>
+                                {app.specialty && (
+                                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", sc.bg, sc.text)}>
+                                    {(app.specialty as { name: string }).name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
-                </button>
-              )
-            })}
-          </div>
+                )
+              })
+            }
+
+            return (
+              <div>
+                {pastDates.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Historial — últimos 90 días</p>
+                    {renderGroup(pastDates, true)}
+                  </div>
+                )}
+                {todayAndFuture.length > 0 && (
+                  <div>
+                    {pastDates.length > 0 && <div className="border-t border-gray-100 my-3"/>}
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Próximas citas</p>
+                    {renderGroup(todayAndFuture, false)}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
