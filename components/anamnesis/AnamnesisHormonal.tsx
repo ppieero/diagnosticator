@@ -12,27 +12,32 @@ interface Props {
 }
 
 const CONTRACEPTIVES = [
-  {v:"ninguno",l:"Ninguno"},{v:"pildora",l:"Píldora"},{v:"diu_hormonal",l:"DIU hormonal"},
-  {v:"diu_cobre",l:"DIU cobre"},{v:"implante",l:"Implante"},{v:"inyectable",l:"Inyectable"},
-  {v:"parche",l:"Parche"},{v:"anillo",l:"Anillo"},{v:"barrera",l:"Barrera"},{v:"ligadura",l:"Ligadura"},
+  { v: "ninguno", l: "Ninguno" }, { v: "pildora", l: "Píldora" },
+  { v: "diu_hormonal", l: "DIU hormonal" }, { v: "diu_cobre", l: "DIU cobre" },
+  { v: "implante", l: "Implante" }, { v: "inyectable", l: "Inyectable" },
+  { v: "parche", l: "Parche" }, { v: "anillo", l: "Anillo" },
+  { v: "barrera", l: "Barrera" }, { v: "ligadura", l: "Ligadura" },
 ]
 
 function imcLabel(imc: number): { label: string; color: string } {
-  if (imc < 18.5) return { label: "Bajo peso", color: "text-blue-700 bg-blue-50 border-blue-200" }
-  if (imc < 25)   return { label: "Normal", color: "text-green-700 bg-green-50 border-green-200" }
-  if (imc < 30)   return { label: "Sobrepeso", color: "text-amber-700 bg-amber-50 border-amber-200" }
-  return { label: "Obesidad", color: "text-red-700 bg-red-50 border-red-200" }
+  if (imc < 18.5) return { label: "Bajo peso",   color: "text-blue-700 bg-blue-50 border-blue-200" }
+  if (imc < 25)   return { label: "Normal",       color: "text-green-700 bg-green-50 border-green-200" }
+  if (imc < 30)   return { label: "Sobrepeso",    color: "text-amber-700 bg-amber-50 border-amber-200" }
+  return             { label: "Obesidad",          color: "text-red-700 bg-red-50 border-red-200" }
 }
 
-export function AnamnesisHormonal({ snapshot, setSnapshot, patient, onComplete }: Props) {
+export function AnamnesisHormonal({ snapshot, setSnapshot, patient: _patient, onComplete }: Props) {
   const [openSec, setOpenSec] = useState<number | null>(1)
   const [doneSecs, setDoneSecs] = useState<Set<number>>(new Set<number>())
 
-  const sg = (k: string, v: unknown) => setSnapshot(p => ({ ...p, [k]: v } as AnamnesisSnapshot))
-  const mu = (k: string, v: string) => setSnapshot(p => {
-    const a = ((p as unknown as Record<string, unknown>)[k] as string[]) ?? []
-    return { ...p, [k]: a.includes(v) ? a.filter((x: string) => x !== v) : [...a, v] } as AnamnesisSnapshot
-  })
+  const sg = (k: string, v: unknown) =>
+    setSnapshot(p => ({ ...p, [k]: v } as AnamnesisSnapshot))
+
+  const mu = (k: string, v: string) =>
+    setSnapshot(p => {
+      const a = ((p as unknown as Record<string, unknown>)[k] as string[]) ?? []
+      return { ...p, [k]: a.includes(v) ? a.filter((x: string) => x !== v) : [...a, v] } as AnamnesisSnapshot
+    })
 
   const snap = snapshot as unknown as Record<string, unknown>
   const total = 2
@@ -46,11 +51,11 @@ export function AnamnesisHormonal({ snapshot, setSnapshot, patient, onComplete }
     return null
   }, [snapshot.weight_kg, snapshot.height_cm])
 
-  const cycleAbsent = snap.cycle_regularity === "ausente"
+  const cycleAbsent = snap.regularidad_ciclo === "ausente"
 
   const sections = [
     { n: 1, title: "Antropometría y estado menopáusico", sub: "Peso, talla, IMC, ciclo menstrual" },
-    { n: 2, title: "Historia ginecológica", sub: "Gestaciones, anticonceptivos, motivo consulta" },
+    { n: 2, title: "Historia ginecológica", sub: "Gestaciones, anticonceptivos, estado menopáusico" },
   ]
 
   return (
@@ -78,9 +83,14 @@ export function AnamnesisHormonal({ snapshot, setSnapshot, patient, onComplete }
                   isDone ? "bg-green-100 text-green-800" : isOpen ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-500 border border-gray-200")}>
                   {isDone ? "✓" : n}
                 </div>
-                <div><p className="text-sm font-medium text-gray-900">{title}</p><p className="text-xs text-gray-400">{sub}</p></div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-400">{sub}</p>
+                </div>
               </div>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("text-gray-400 transition-transform flex-shrink-0", isOpen ? "rotate-180" : "")}><polyline points="6 9 12 15 18 9" /></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("text-gray-400 transition-transform flex-shrink-0", isOpen ? "rotate-180" : "")}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </button>
 
             {isOpen && (
@@ -96,6 +106,7 @@ export function AnamnesisHormonal({ snapshot, setSnapshot, patient, onComplete }
                       <input type="number" value={snapshot.height_cm ?? ""} onChange={e => setSnapshot(p => ({ ...p, height_cm: parseInt(e.target.value) || undefined }))} placeholder="165" className="input-base" />
                     </div>
                   </div>
+
                   {imc !== null && (
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">IMC:</span>
@@ -104,104 +115,125 @@ export function AnamnesisHormonal({ snapshot, setSnapshot, patient, onComplete }
                       </span>
                     </div>
                   )}
-                  {patient?.biological_sex !== "male" && (<>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Circunferencia abdominal (cm)</label>
+                    <input type="number" value={snap.waist_cm as number ?? ""} onChange={e => sg("waist_cm", parseFloat(e.target.value) || undefined)} placeholder="80" className="input-base" />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Edad de menarquia (años)</label>
+                    <input type="number" min="8" max="20" value={snap.menarquia_edad as number ?? ""} onChange={e => sg("menarquia_edad", parseInt(e.target.value) || undefined)} placeholder="12" className="input-base" />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Última menstruación</label>
+                    <input type="date" value={snap.ultima_menstruacion as string ?? ""} onChange={e => sg("ultima_menstruacion", e.target.value)} className="input-base" />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Etapa menopáusica</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        ["premenopausia", "Premenopausia"],
+                        ["perimenopausia_temprana", "Perimenopausia temprana"],
+                        ["perimenopausia_tardia", "Perimenopausia tardía"],
+                        ["menopausia", "Menopausia"],
+                        ["postmenopausia", "Postmenopausia"],
+                      ].map(([v, l]) => (
+                        <button key={v} type="button" onClick={() => sg("etapa_menopausica", v)}
+                          className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",
+                            snap.etapa_menopausica === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Regularidad del ciclo</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[["regular", "Regular"], ["irregular", "Irregular"], ["ausente", "Ausente"]].map(([v, l]) => (
+                        <button key={v} type="button" onClick={() => sg("regularidad_ciclo", v)}
+                          className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",
+                            snap.regularidad_ciclo === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {!cycleAbsent && (<>
                     <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">Embarazo actual</p>
-                      <div className="flex flex-wrap gap-2">
-                        {([["not_applicable", "No aplica"], ["no", "No"], ["yes", "Sí"]] as const).map(([v, l]) => (
-                          <button key={v} type="button" onClick={() => setSnapshot(p => ({ ...p, pregnancy_status: v as AnamnesisSnapshot["pregnancy_status"] }))}
-                            className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", snapshot.pregnancy_status === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
-                            {l}
-                          </button>
-                        ))}
-                      </div>
+                      <label className="text-xs font-medium text-gray-500 block mb-1">Duración promedio del ciclo (días)</label>
+                      <input type="number" min="15" max="60" value={snap.duracion_ciclo as number ?? ""} onChange={e => sg("duracion_ciclo", parseInt(e.target.value) || undefined)} placeholder="28" className="input-base" />
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">Regularidad del ciclo</p>
-                      <div className="flex flex-wrap gap-2">
-                        {[["regular", "Regular"], ["irregular", "Irregular"], ["ausente", "Ausente"]].map(([v, l]) => (
-                          <button key={v} type="button" onClick={() => sg("cycle_regularity", v)}
-                            className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", snap.cycle_regularity === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
-                            {l}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {!cycleAbsent && (<>
-                      <div>
-                        <label className="text-xs font-medium text-gray-500 block mb-1">Fecha última menstruación</label>
-                        <input type="date" value={snap.last_menstruation as string ?? ""} onChange={e => sg("last_menstruation", e.target.value)} className="input-base" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">Duración del ciclo</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[["21_23d", "21–23 días"], ["24_26d", "24–26 días"], ["27_29d", "27–29 días"], ["30_32d", "30–32 días"], ["gt_32d", "> 32 días"], ["irregular", "Irregular"]].map(([v, l]) => (
-                            <button key={v} type="button" onClick={() => sg("cycle_duration", v)}
-                              className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", snap.cycle_duration === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">Flujo menstrual</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[["escaso", "Escaso"], ["normal", "Normal"], ["abundante", "Abundante"], ["muy_abundante", "Muy abundante"]].map(([v, l]) => (
-                            <button key={v} type="button" onClick={() => sg("menstrual_flow", v)}
-                              className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", snap.menstrual_flow === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>)}
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">Estado menopáusico</p>
+                      <p className="text-xs font-medium text-gray-500 mb-2">Flujo menstrual</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {[["premenopausia", "Premenopausia"], ["perimenopausia", "Perimenopausia"], ["postmenopausia", "Postmenopausia"], ["no_aplica", "No aplica"]].map(([v, l]) => (
-                          <button key={v} type="button" onClick={() => sg("menopause_status", v)}
-                            className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", snap.menopause_status === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                        {[["leve", "Leve"], ["moderado", "Moderado"], ["abundante", "Abundante"]].map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => sg("flujo_menstrual", v)}
+                            className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",
+                              snap.flujo_menstrual === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
                             {l}
                           </button>
                         ))}
                       </div>
                     </div>
-                    {snap.menopause_status === "postmenopausia" && (
-                      <div>
-                        <label className="text-xs font-medium text-gray-500 block mb-1">Edad de menopausia</label>
-                        <input type="number" min="30" max="70" value={snap.menopause_age as number ?? ""} onChange={e => sg("menopause_age", parseInt(e.target.value) || undefined)} placeholder="Ej: 50" className="input-base w-32" />
-                      </div>
-                    )}
                   </>)}
+
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Amenorrea</p>
+                    <div className="flex gap-2">
+                      {[["si", "Sí"], ["no", "No"]].map(([v, l]) => (
+                        <button key={v} type="button" onClick={() => sg("amenorrea", v)}
+                          className={cn("px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
+                            snap.amenorrea === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </>)}
 
                 {n === 2 && (<>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Gestaciones</label><input type="number" min="0" value={snap.gestations as number ?? ""} onChange={e => sg("gestations", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
-                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Partos</label><input type="number" min="0" value={snap.births as number ?? ""} onChange={e => sg("births", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
-                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Cesáreas</label><input type="number" min="0" value={snap.cesareans as number ?? ""} onChange={e => sg("cesareans", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
-                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Abortos espontáneos</label><input type="number" min="0" value={snap.abortions as number ?? ""} onChange={e => sg("abortions", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
+                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Gestaciones</label><input type="number" min="0" value={snap.gestaciones as number ?? ""} onChange={e => sg("gestaciones", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
+                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Partos</label><input type="number" min="0" value={snap.partos as number ?? ""} onChange={e => sg("partos", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
+                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Cesáreas</label><input type="number" min="0" value={snap.cesareas as number ?? ""} onChange={e => sg("cesareas", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
+                    <div><label className="text-xs font-medium text-gray-500 block mb-1">Abortos</label><input type="number" min="0" value={snap.abortos as number ?? ""} onChange={e => sg("abortos", parseInt(e.target.value) || 0)} placeholder="0" className="input-base" /></div>
                   </div>
+
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-2">Anticonceptivos actuales</p>
                     <div className="flex flex-wrap gap-1.5">
                       {CONTRACEPTIVES.map(o => (
-                        <button key={o.v} type="button" onClick={() => mu("contraceptives", o.v)}
-                          className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all", (snap.contraceptives as string[] ?? []).includes(o.v) ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                        <button key={o.v} type="button" onClick={() => mu("anticonceptivos", o.v)}
+                          className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",
+                            (snap.anticonceptivos as string[] ?? []).includes(o.v) ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
                           {o.l}
                         </button>
                       ))}
                     </div>
                   </div>
+
                   <div>
-                    <label className="text-xs font-medium text-gray-500 block mb-1">Motivo de consulta <span className="text-red-500">*</span></label>
-                    <textarea rows={2} value={snapshot.main_complaint ?? ""} onChange={e => setSnapshot(p => ({ ...p, main_complaint: e.target.value }))} placeholder="¿Por qué consulta hoy?" className="input-base resize-none" />
+                    <p className="text-xs font-medium text-gray-500 mb-2">Estado menopáusico confirmado</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[["premenopausia", "Premenopausia"], ["perimenopausia", "Perimenopausia"], ["postmenopausia", "Postmenopausia"], ["no_aplica", "No aplica"]].map(([v, l]) => (
+                        <button key={v} type="button" onClick={() => sg("estado_menopausico_confirmado", v)}
+                          className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",
+                            snap.estado_menopausico_confirmado === v ? "bg-purple-50 border-purple-500 text-purple-800 border-[1.5px]" : "border-gray-200 text-gray-700")}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </>)}
 
                 <div className={cn("grid gap-2 mt-2", prevN ? "grid-cols-2" : "grid-cols-1")}>
                   {prevN && <button type="button" onClick={() => setOpenSec(prevN)} className="tap-target rounded-xl border border-gray-300 text-gray-700 text-sm font-medium">← Anterior</button>}
-                  {nextN && <button type="button" onClick={() => { setDoneSecs(d => new Set([...d, n])); setOpenSec(nextN) }} className="tap-target rounded-xl bg-purple-600 text-white text-sm font-semibold">Siguiente →</button>}
+                  {nextN && <button type="button" onClick={() => { setDoneSecs(d => new Set([...d, n])); setOpenSec(nextN) }} className="tap-target rounded-xl bg-purple-600 text-white text-sm font-semibold">Continuar →</button>}
                   {!nextN && onComplete && (
                     <button type="button" onClick={() => { setDoneSecs(d => new Set([...d, n])); onComplete() }} className="tap-target rounded-xl bg-purple-600 text-white text-sm font-semibold">Continuar →</button>
                   )}

@@ -5,25 +5,49 @@ const client = new Anthropic()
 
 export async function POST(req: NextRequest) {
   try {
-    const { patient, anamnesis, evaluation_data } = await req.json()
+    const { patient, anamnesis, evaluation, historialClinico } = await req.json()
 
     const context = `
 PACIENTE:
-- Sexo biológico: Femenino
+- Sexo: ${patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
 - Fecha nacimiento: ${patient?.birth_date ?? "No especificada"}
 
-ANAMNESIS HORMONAL:
-- Motivo de consulta: ${anamnesis?.main_complaint ?? "No especificado"}
-- Peso: ${anamnesis?.weight_kg ?? "?"} kg | Talla: ${anamnesis?.height_cm ?? "?"} cm
-- Ciclo menstrual — regularidad: ${anamnesis?.cycle_regularity ?? "No especificada"} | duración: ${anamnesis?.cycle_duration ?? "No especificada"} | flujo: ${anamnesis?.menstrual_flow ?? "No especificado"}
-- Última menstruación: ${anamnesis?.last_menstruation ?? "No especificada"}
-- Estado menopáusico: ${anamnesis?.menopause_status ?? "No especificado"}${anamnesis?.menopause_age ? ` (edad: ${anamnesis.menopause_age})` : ""}
-- Embarazo: ${anamnesis?.pregnancy_status ?? "No aplica"}
-- Gestaciones: ${anamnesis?.gestations ?? 0} | Partos: ${anamnesis?.births ?? 0} | Cesáreas: ${anamnesis?.cesareans ?? 0} | Abortos: ${anamnesis?.abortions ?? 0}
-- Anticonceptivos: ${Array.isArray(anamnesis?.contraceptives) ? (anamnesis.contraceptives as string[]).join(", ") : "No especificado"}
+ANAMNESIS DE CONSULTA:
+- Peso: ${anamnesis?.weight_kg ?? "ND"} kg | Talla: ${anamnesis?.height_cm ?? "ND"} cm
+- Circunferencia abdominal: ${anamnesis?.waist_cm ?? "ND"} cm
+- Etapa menopáusica: ${anamnesis?.etapa_menopausica ?? "ND"}
+- Última menstruación: ${anamnesis?.ultima_menstruacion ?? "ND"}
+- Regularidad ciclo: ${anamnesis?.regularidad_ciclo ?? "ND"}
+- Amenorrea: ${anamnesis?.amenorrea ?? "ND"}
+- Gestaciones: ${anamnesis?.gestaciones ?? "ND"} | Partos: ${anamnesis?.partos ?? "ND"}
+- Anticonceptivos: ${JSON.stringify(anamnesis?.anticonceptivos ?? [])}
 
-DATOS DE EVALUACIÓN:
-${evaluation_data ? JSON.stringify(evaluation_data, null, 2) : "Sin datos de evaluación"}
+HISTORIAL CLÍNICO:
+- Alergias: ${JSON.stringify(historialClinico?.known_allergies ?? [])}
+- Medicación habitual: ${JSON.stringify(historialClinico?.active_medications ?? [])}
+- Antecedentes: ${JSON.stringify(historialClinico?.personal_history ?? [])}
+
+EVALUACIÓN CLÍNICA:
+- Síntomas vasomotores: ${JSON.stringify({
+  bochornos: evaluation?.bochornos,
+  sudores_nocturnos: evaluation?.sudores_nocturnos,
+  palpitaciones: evaluation?.palpitaciones
+})}
+- Síntomas neurocognitivos: ${JSON.stringify({
+  niebla_mental: evaluation?.niebla_mental,
+  ansiedad: evaluation?.ansiedad,
+  irritabilidad: evaluation?.irritabilidad,
+  bajo_animo: evaluation?.bajo_animo,
+  insomnio: evaluation?.insomnio
+})}
+- Síntomas metabólicos: ${JSON.stringify({
+  grasa_abdominal: evaluation?.grasa_abdominal,
+  dificultad_perder_peso: evaluation?.dificultad_perder_peso,
+  caida_cabello: evaluation?.caida_cabello
+})}
+- Screening riesgos: cancer_mama=${evaluation?.riesgo_cancer_mama}, trombosis=${evaluation?.riesgo_trombosis}, cardiovascular=${evaluation?.riesgo_cardiovascular}, miomas=${evaluation?.riesgo_miomas}
+- Laboratorios: estradiol=${evaluation?.estradiol_valor ?? "ND"}, progesterona=${evaluation?.progesterona_valor ?? "ND"}, tsh=${evaluation?.tsh_valor ?? "ND"}, vitamina_d=${evaluation?.vitamina_d_valor ?? "ND"}
+- Estilo de vida: patron=${evaluation?.patron_alimentario}, ejercicio=${evaluation?.ejercicio_tipo}, estres=${evaluation?.nivel_estres}/10, sueno=${evaluation?.horas_sueno}h calidad=${evaluation?.calidad_sueno}/10
 `.trim()
 
     const message = await client.messages.create({
@@ -31,43 +55,30 @@ ${evaluation_data ? JSON.stringify(evaluation_data, null, 2) : "Sin datos de eva
       max_tokens: 2048,
       messages: [{
         role: "user",
-        content: `Eres una IA clínica especializada en medicina hormonal femenina (ginecología endocrina, menopausia, SOP, tiroides, suprarrenales). Analiza el siguiente contexto clínico completo de una paciente y genera un análisis hormonal estructurado.
+        content: `Eres un médico especialista en medicina hormonal femenina y menopausia. Analiza la siguiente información clínica completa y genera un análisis estructurado.
 
 ${context}
 
-Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta, sin texto adicional ni markdown:
+Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta, sin texto adicional, sin markdown:
 {
-  "clinical_impression": "Párrafo con impresión clínica general del estado hormonal de la paciente",
-  "suspected_patterns": [
-    {"pattern": "Nombre del patrón/síndrome", "confidence": "alta|media|baja", "rationale": "Justificación clínica breve"}
-  ],
-  "priority_labs": [
-    {"name": "Nombre del laboratorio", "reason": "Por qué pedirlo", "priority": "high|medium|low", "timing": "Cuándo tomarlo (ej: día 3 del ciclo)"}
-  ],
-  "treatment_approach": ["Línea de tratamiento o intervención 1", "Línea 2"],
-  "lifestyle_recommendations": ["Recomendación de estilo de vida 1", "Recomendación 2"],
-  "alerts": ["Alerta clínica si aplica — solo si hay señales reales"],
-  "follow_up": "Sugerencia de seguimiento y control"
-}
-
-Reglas:
-- suspected_patterns: máximo 4 patrones, ordenados por relevancia
-- priority_labs: máximo 8 laboratorios, ordenados de mayor a menor prioridad
-- treatment_approach: máximo 5 líneas cortas
-- lifestyle_recommendations: máximo 4 recomendaciones
-- alerts: solo incluir si hay señales reales de alarma
-- Responder siempre en español
-- Ser específico y clínicamente preciso, no genérico`
+  "impresion_clinica": "párrafo con impresión clínica detallada en español",
+  "etapa_sugerida": "premenopausia|perimenopausia_temprana|perimenopausia_tardia|menopausia|postmenopausia",
+  "sintomas_predominantes": ["síntoma1", "síntoma2"],
+  "riesgos_identificados": ["riesgo1", "riesgo2"],
+  "alertas_contraindicaciones": ["alerta si hay contraindicaciones detectadas — vacío si no hay"],
+  "lineas_tratamiento": ["línea 1", "línea 2", "línea 3"],
+  "examenes_sugeridos": ["examen si faltan laboratorios importantes — vacío si tiene todo"],
+  "seguimiento_recomendado": "recomendación de seguimiento en texto corto"
+}`
       }]
     })
 
     const text = message.content[0].type === "text" ? message.content[0].text : ""
     const clean = text.replace(/```json|```/g, "").trim()
     const parsed = JSON.parse(clean)
-
     return NextResponse.json(parsed)
   } catch (e) {
-    console.error("AI hormonal analysis error:", e)
-    return NextResponse.json({ error: "Error generando análisis hormonal" }, { status: 500 })
+    console.error("AI hormonal error:", e)
+    return NextResponse.json({ error: "Error generando análisis" }, { status: 500 })
   }
 }

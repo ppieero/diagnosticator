@@ -8,6 +8,8 @@ import { RepeatingGroup } from "./fields/RepeatingGroup"
 import { ScoredTestField } from "./fields/ScoredTestField"
 import { BodyMapField } from "./fields/BodyMapField"
 import { LabUploadField } from "./fields/LabUploadField"
+import { VasomotorField } from "./fields/VasomotorField"
+import { SymptomScaleField } from "./fields/SymptomScaleField"
 import { cn } from "@/lib/utils"
 
 interface FieldRendererProps {
@@ -34,7 +36,7 @@ export function FieldRenderer({ field, value, onChange, allAnswers, disabled }: 
 
   return (
     <div className="flex flex-col gap-1.5">
-      {field.type !== "section_header" && field.type !== "divider" && field.type !== "info_text" && (
+      {field.type !== "section_header" && field.type !== "divider" && field.type !== "info_text" && field.type !== "vasomotor" && (
         <div className="flex items-baseline gap-1">
           <label className="text-sm font-medium text-gray-700">{field.label}</label>
           {field.required && <span className="text-red-500 text-sm">*</span>}
@@ -342,6 +344,24 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
         <PalpationField
           value={value}
           onChange={onChange}
+          disabled={disabled}
+        />
+      )
+    case "vasomotor":
+      return (
+        <VasomotorField
+          label={field.label}
+          value={value as { tiene: boolean; frecuencia?: string; severidad?: number }}
+          onChange={onChange as (v: { tiene: boolean; frecuencia?: string; severidad?: number }) => void}
+          disabled={disabled}
+        />
+      )
+    case "symptom_scale":
+      return (
+        <SymptomScaleField
+          label={field.label}
+          value={value as string}
+          onChange={onChange as (v: string) => void}
           disabled={disabled}
         />
       )

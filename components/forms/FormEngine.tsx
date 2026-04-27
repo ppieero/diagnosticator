@@ -73,6 +73,16 @@ export function FormEngine({
   const [aiHormonalLoading, setAiHormonalLoading] = useState(false)
   const [aiHormonalAnalysis, setAiHormonalAnalysis] = useState<AIHormonalAnalysis|null>(null)
   const [aiHormonalError, setAiHormonalError] = useState<string|null>(null)
+  const [aiHormonalResult, setAiHormonalResult] = useState<{
+    impresion_clinica: string
+    etapa_sugerida: string
+    sintomas_predominantes: string[]
+    riesgos_identificados: string[]
+    alertas_contraindicaciones: string[]
+    lineas_tratamiento: string[]
+    examenes_sugeridos: string[]
+    seguimiento_recomendado: string
+  }|null>(null)
 
   const setAnswer = useCallback((key: string, val: unknown) => {
     setAnswers(prev => ({ ...prev, [key]: val }))
@@ -120,6 +130,25 @@ export function FormEngine({
       setAiPrediagnosis(await resp.json())
     } catch { setAiDxError("No se pudo generar el pre-diagnóstico. Intenta nuevamente.") }
     finally { setAiDxLoading(false) }
+  }
+
+  async function runHormonalAI() {
+    setAiHormonalLoading(true); setAiHormonalError(null)
+    try {
+      const resp = await fetch("/api/ai-hormonal-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient: { biological_sex: clinicalContext.patientSex, birth_date: clinicalContext.patientBirthDate },
+          anamnesis: clinicalContext.anamnesisSnapshot ?? {},
+          evaluation: answers,
+          historialClinico: clinicalContext.profile ?? {}
+        })
+      })
+      if (!resp.ok) throw new Error()
+      setAiHormonalResult(await resp.json())
+    } catch { setAiHormonalError("No se pudo generar el análisis. Intenta nuevamente.") }
+    finally { setAiHormonalLoading(false) }
   }
 
   async function runAIHormonalAnalysis() {
@@ -355,6 +384,92 @@ export function FormEngine({
                       </div>
                     )}
                     <p className="text-xs text-gray-400">Análisis orientativo — el profesional confirma el diagnóstico y plan terapéutico.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {section.id === "s_ia_hormonal" && !disabled && (
+            <div className="border border-purple-200 rounded-2xl overflow-hidden">
+              <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#534AB7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                <span className="text-xs font-semibold text-purple-900 uppercase tracking-wide">IA — Análisis clínico hormonal</span>
+              </div>
+              <div className="px-5 py-4 flex flex-col gap-3">
+                {!aiHormonalResult && !aiHormonalLoading && (
+                  <>
+                    <p className="text-xs text-gray-500 leading-relaxed">Analiza historial clínico + anamnesis + toda la evaluación para generar un análisis clínico hormonal completo.</p>
+                    {aiHormonalError && <p className="text-xs text-red-600">{aiHormonalError}</p>}
+                    <button onClick={runHormonalAI} className="w-full py-2.5 rounded-xl bg-purple-700 text-white text-sm font-semibold flex items-center justify-center gap-2">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                      Generar análisis completo →
+                    </button>
+                  </>
+                )}
+                {aiHormonalLoading && (
+                  <div className="flex flex-col items-center gap-2 py-3">
+                    <div className="w-7 h-7 rounded-full border-2 border-purple-600 border-t-transparent animate-spin"/>
+                    <p className="text-xs text-gray-500">Analizando historial clínico completo...</p>
+                  </div>
+                )}
+                {aiHormonalResult && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-purple-900">Análisis generado</span>
+                      <button onClick={() => setAiHormonalResult(null)} className="text-xs text-gray-400 hover:text-gray-600">Descartar</button>
+                    </div>
+                    <div className="px-3 py-2.5 bg-purple-50 rounded-xl">
+                      <p className="text-xs font-medium text-purple-900 mb-1">Impresión clínica</p>
+                      <p className="text-xs text-purple-800 leading-relaxed">{aiHormonalResult.impresion_clinica}</p>
+                    </div>
+                    <div className="px-3 py-2.5 bg-blue-50 rounded-xl">
+                      <p className="text-xs font-medium text-blue-900 mb-1">Etapa sugerida</p>
+                      <p className="text-xs text-blue-800">{aiHormonalResult.etapa_sugerida.replace(/_/g, " ")}</p>
+                    </div>
+                    {aiHormonalResult.alertas_contraindicaciones.length > 0 && (
+                      <div className="px-3 py-2.5 bg-red-50 rounded-xl border border-red-200">
+                        <p className="text-xs font-semibold text-red-900 mb-1">Alertas / Contraindicaciones</p>
+                        {aiHormonalResult.alertas_contraindicaciones.map((a, i) => <p key={i} className="text-xs text-red-700">{a}</p>)}
+                      </div>
+                    )}
+                    {aiHormonalResult.sintomas_predominantes.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 mb-1.5">Síntomas predominantes</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiHormonalResult.sintomas_predominantes.map((s, i) => (
+                            <span key={i} className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiHormonalResult.lineas_tratamiento.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 mb-1.5">Líneas de tratamiento sugeridas</p>
+                        <div className="flex flex-col gap-1.5">
+                          {aiHormonalResult.lineas_tratamiento.map((l, i) => (
+                            <div key={i} className="flex items-start gap-2 px-3 py-2 bg-green-50 rounded-xl">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0 mt-1.5"/>
+                              <p className="text-xs text-green-900">{l}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiHormonalResult.examenes_sugeridos.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 mb-1.5">Exámenes sugeridos</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiHormonalResult.examenes_sugeridos.map((e, i) => (
+                            <span key={i} className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200">{e}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="px-3 py-2 bg-gray-50 rounded-xl">
+                      <p className="text-xs font-medium text-gray-700 mb-0.5">Seguimiento recomendado</p>
+                      <p className="text-xs text-gray-600">{aiHormonalResult.seguimiento_recomendado}</p>
+                    </div>
+                    <p className="text-xs text-gray-400">Análisis orientativo — el profesional confirma el diagnóstico.</p>
                   </div>
                 )}
               </div>
