@@ -163,8 +163,9 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
 
     case "radio": {
       const opts = field.options ?? []
+      const isChips = opts.length > 4
       return (
-        <div className={cn("flex gap-2", opts.length > 3 ? "flex-col" : "flex-wrap")}>
+        <div className={cn("flex gap-2", isChips ? "flex-wrap" : opts.length > 3 ? "flex-col" : "flex-wrap")}>
           {opts.map(opt => (
             <button
               key={opt.value}
@@ -172,7 +173,10 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
               disabled={disabled}
               onClick={() => onChange(opt.value)}
               className={cn(
-                "px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all min-h-[44px] flex-1",
+                "transition-all font-medium border-2",
+                isChips
+                  ? "px-3 py-1.5 rounded-full text-xs min-h-[34px]"
+                  : "px-4 py-2.5 rounded-xl text-sm min-h-[44px] flex-1",
                 value === opt.value
                   ? "bg-blue-600 text-white border-blue-600"
                   : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
@@ -257,8 +261,10 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
 
     case "section_header":
       return (
-        <div className="pt-2 pb-1">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{field.label}</p>
+        <div className="flex items-center gap-3 pt-2 pb-1">
+          <div className="h-px flex-1 bg-gray-200"/>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex-shrink-0">{field.label}</p>
+          <div className="h-px flex-1 bg-gray-200"/>
         </div>
       )
 

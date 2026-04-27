@@ -26,7 +26,7 @@ export async function getServices(specialtyId?: string): Promise<Service[]> {
   const supabase = createClient()
   let query = supabase
     .from("services")
-    .select("*, specialty:specialties(id, name, slug, color), form_template:specialty_form_templates(id, name)")
+    .select("*, specialty:specialties(id, name, slug, color)")
     .order("name")
   if (specialtyId) query = query.eq("specialty_id", specialtyId)
   const { data, error } = await query
@@ -38,7 +38,7 @@ export async function getService(id: string): Promise<Service | null> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("services")
-    .select("*, specialty:specialties(id, name, slug, color), form_template:specialty_form_templates(id, name)")
+    .select("*, specialty:specialties(id, name, slug, color)")
     .eq("id", id)
     .single()
   if (error) return null

@@ -95,16 +95,20 @@ export function SectionRenderer({
           {section.description && (
             <p className="text-xs text-gray-500 -mt-2">{section.description}</p>
           )}
-          {section.fields.map(field => (
-            <FieldRenderer
-              key={field.key}
-              field={field}
-              value={answers[field.key]}
-              onChange={val => onChange(field.key, val)}
-              allAnswers={answers}
-              disabled={disabled}
-            />
-          ))}
+          {section.fields.map(field => {
+            const si = (field as Record<string,unknown>).show_if as {field:string;value:string}|undefined
+            if (si && answers[si.field] !== si.value) return null
+            return (
+              <FieldRenderer
+                key={field.key}
+                field={field}
+                value={answers[field.key]}
+                onChange={val => onChange(field.key, val)}
+                allAnswers={answers}
+                disabled={disabled}
+              />
+            )
+          })}
         </div>
       )}
     </div>

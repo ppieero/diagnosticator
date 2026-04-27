@@ -279,7 +279,7 @@ export interface FormTemplateConfig {
 }
 
 // ── Body map ──────────────────────────────────────────────────
-export type BodyMapMarkerType = 'primary' | 'irradiated' | 'paresthesia' | 'numbness'
+export type BodyMapMarkerType = 'primary' | 'superficial' | 'deep' | 'irradiated' | 'paresthesia' | 'numbness'
 
 export interface BodyMapMarker {
   zone: string
@@ -287,7 +287,7 @@ export interface BodyMapMarker {
   intensity: number
   x: number
   y: number
-  view: 'front' | 'back'
+  view: 'front' | 'back' | 'lateral_right' | 'lateral_left'
 }
 
 // ── Scored test ───────────────────────────────────────────────
