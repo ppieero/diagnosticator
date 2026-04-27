@@ -55,6 +55,23 @@ const SC_OPTS=[{v:"exercise",l:"Ejercicio"},{v:"breathing_meditation",l:"Respira
 
 type Tab="demograficos"|"antecedentes"|"signos"|"historial"
 
+const SPECIALTY_CONFIG: Record<string,{label:string;bg:string;text:string}> = {
+  fisioterapia:        {label:"Fisioterapia",     bg:"#E6F1FB",text:"#0C447C"},
+  "medicina-hormonal": {label:"Med. Hormonal",    bg:"#EEEDFE",text:"#3C3489"},
+  "medicina_hormonal": {label:"Med. Hormonal",    bg:"#EEEDFE",text:"#3C3489"},
+  nutricion:           {label:"Nutrición",        bg:"#EAF3DE",text:"#27500A"},
+  nutrición:           {label:"Nutrición",        bg:"#EAF3DE",text:"#27500A"},
+  psicologia:          {label:"Psicología",       bg:"#FAEEDA",text:"#633806"},
+  psicología:          {label:"Psicología",       bg:"#FAEEDA",text:"#633806"},
+}
+
+function SpecialtyBadge({slug}:{slug?:string}) {
+  if (!slug) return null
+  const cfg = SPECIALTY_CONFIG[slug]
+  if (!cfg) return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{slug}</span>
+  return <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{background:cfg.bg,color:cfg.text}}>{cfg.label}</span>
+}
+
 function Chip({label,on,onClick,excl=false}:{label:string;on:boolean;onClick:()=>void;excl?:boolean}) {
   return (
     <button type="button" onClick={onClick}
@@ -129,6 +146,7 @@ export default function AnamnesisPage() {
   const [newP, setNewP] = useState({condition:"",status:"active",diagnosed_year:"",notes:""})
   const [newF, setNewF] = useState({condition:"",relationship:"",notes:""})
   const [history, setHistory] = useState<AnamnesisSnapshot[]>([])
+  const [histFilter, setHistFilter] = useState<string>("all")
 
   function tog(id:string){setOpen(o=>o===id?null:id)}
   function showSaved(msg:string){setSavedMsg(msg);setTimeout(()=>setSavedMsg(""),2000)}
@@ -677,23 +695,47 @@ export default function AnamnesisPage() {
       {/* ══ TAB: HISTORIAL ══ */}
       {tab==="historial" && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-gray-400">Todos los registros por consulta — más reciente primero.</p>
+          <p className="text-xs text-gray-400">Anamnesis de consulta — más reciente primero.</p>
+
+          {/* Filtro por especialidad */}
+          {history.length > 0 && (() => {
+            const slugs = [...new Set(history.map(h => (h as Record<string,unknown>).specialty as string).filter(Boolean))]
+            if (slugs.length < 2) return null
+            return (
+              <div className="flex gap-1.5 flex-wrap">
+                <button onClick={()=>setHistFilter("all")} className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",histFilter==="all"?"bg-gray-700 text-white border-gray-700":"border-gray-200 text-gray-600")}>Todas</button>
+                {slugs.map(slug => {
+                  const cfg = SPECIALTY_CONFIG[slug]
+                  return (
+                    <button key={slug} onClick={()=>setHistFilter(slug)} className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",histFilter===slug?"border-[1.5px]":"border-gray-200 text-gray-600")} style={histFilter===slug?{background:cfg?.bg,color:cfg?.text,borderColor:cfg?.text}:undefined}>
+                      {cfg?.label ?? slug}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
           {history.length===0 && (
             <div className="card p-8 text-center">
               <p className="text-sm text-gray-400">Sin registros</p>
               <p className="text-xs text-gray-400 mt-1">Crea el primer registro desde "Nuevo"</p>
             </div>
           )}
-          {history.map((h,i)=>{
+          {history.filter(h => histFilter==="all" || (h as Record<string,unknown>).specialty===histFilter).map((h,i)=>{
             const imc2=calcIMC(h.weight_kg,h.height_cm)
             const pn=h.recorded_by?(profNames[h.recorded_by]??")"):""
             const k=h.id??String(i)
             const isExp=histExpanded===k
+            const specialtySlug = (h as Record<string,unknown>).specialty as string|undefined
             return (
               <div key={k} className={cn("card overflow-hidden",i===0?"border-green-300":"")}>
                 <button onClick={()=>setHistExpanded(isExp?null:k)} className="w-full flex items-center justify-between px-4 py-3 text-left">
-                  <div>
-                    {i===0 && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800 mb-1 inline-flex items-center gap-1"><span style={{width:5,height:5,borderRadius:"50%",background:"#27500A",display:"inline-block"}}></span>Más reciente</span>}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      {i===0 && histFilter==="all" && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800 inline-flex items-center gap-1"><span style={{width:5,height:5,borderRadius:"50%",background:"#27500A",display:"inline-block"}}></span>Más reciente</span>}
+                      {specialtySlug && <SpecialtyBadge slug={specialtySlug}/>}
+                    </div>
                     <p className="text-xs font-semibold text-gray-900">{h.recorded_at?fmt(h.recorded_at):"—"} · {h.recorded_at?fmtTime(h.recorded_at):""}</p>
                     <p className="text-xs text-gray-400">{h.evaluation_id?`${clinicalId(h.evaluation_id,h.recorded_at??"")} · `:""}{pn}</p>
                   </div>

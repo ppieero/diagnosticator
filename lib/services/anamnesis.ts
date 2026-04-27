@@ -24,6 +24,7 @@ export interface AnamnesisSnapshot {
   patient_id: string
   evaluation_id?: string
   recorded_by?: string
+  specialty?: string
   height_cm?: number
   weight_kg?: number
   pregnancy_status?: "not_applicable" | "no" | "yes" | "unknown"

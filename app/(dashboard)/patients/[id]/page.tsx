@@ -348,7 +348,7 @@ export default function PatientDetailPage() {
         </button>
         <button onClick={() => router.push(`/patients/${id}/anamnesis`)}
           className="tap-target rounded-xl border border-gray-300 text-gray-700 text-xs font-medium col-span-2">
-          Ver anamnesis completa
+          Ver historia clínica completa
         </button>
         <button onClick={() => router.push(`/pagos/nuevo?patient_id=${id}`)}
           className="tap-target rounded-xl border border-gray-300 text-gray-700 text-xs font-medium">
