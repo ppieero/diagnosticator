@@ -3,11 +3,90 @@ import Anthropic from "@anthropic-ai/sdk"
 
 const client = new Anthropic()
 
+function resolvePrompt(template: string, data: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] ?? `[${key}]`)
+}
+
+function calcAge(birthDate: string): string {
+  if (!birthDate) return "desconocida"
+  const diff = Date.now() - new Date(birthDate).getTime()
+  return String(Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)))
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { patient, anamnesis, evaluation, historialClinico } = await req.json()
+    const { patient, anamnesis, evaluation, evaluation_data, historialClinico, custom_prompt } = await req.json()
 
-    const context = `
+    const evalData = evaluation ?? evaluation_data ?? {}
+
+    let context: string
+
+    if (custom_prompt && custom_prompt.trim()) {
+      const vars: Record<string, string> = {
+        sexo: patient?.biological_sex === "female" ? "Femenino" : "No especificado",
+        edad: calcAge(patient?.birth_date),
+        etapa_menopausica: String(anamnesis?.etapa_menopausica ?? "ND"),
+        ultima_menstruacion: String(anamnesis?.ultima_menstruacion ?? "ND"),
+        regularidad_ciclo: String(anamnesis?.regularidad_ciclo ?? "ND"),
+        historia_ginecologica: JSON.stringify({
+          gestaciones: anamnesis?.gestaciones,
+          partos: anamnesis?.partos,
+          cesareas: anamnesis?.cesareas,
+          anticonceptivos: anamnesis?.anticonceptivos,
+        }),
+        vasomotores: JSON.stringify({
+          bochornos: evalData?.bochornos,
+          sudores_nocturnos: evalData?.sudores_nocturnos,
+          palpitaciones: evalData?.palpitaciones,
+        }),
+        neurocognitivos: JSON.stringify({
+          niebla_mental: evalData?.niebla_mental,
+          ansiedad: evalData?.ansiedad,
+          irritabilidad: evalData?.irritabilidad,
+          bajo_animo: evalData?.bajo_animo,
+          insomnio: evalData?.insomnio,
+        }),
+        hormonales_sexualidad: JSON.stringify({
+          libido: evalData?.libido,
+          dispareunia: evalData?.dispareunia,
+          sequedad_vaginal: evalData?.sequedad_vaginal,
+        }),
+        metabolicos: JSON.stringify({
+          grasa_abdominal: evalData?.grasa_abdominal,
+          dificultad_perder_peso: evalData?.dificultad_perder_peso,
+          caida_cabello: evalData?.caida_cabello,
+        }),
+        genitourinario: JSON.stringify({
+          incontinencia: evalData?.incontinencia,
+          urgencia_miccional: evalData?.urgencia_miccional,
+          infecciones_urinarias: evalData?.infecciones_urinarias,
+        }),
+        screening_riesgos: JSON.stringify({
+          cancer_mama: evalData?.riesgo_cancer_mama,
+          trombosis: evalData?.riesgo_trombosis,
+          cardiovascular: evalData?.riesgo_cardiovascular,
+          miomas: evalData?.riesgo_miomas,
+        }),
+        antecedentes_medicos: JSON.stringify(historialClinico?.personal_history ?? anamnesis?.personal_history ?? []),
+        medicacion: JSON.stringify(historialClinico?.active_medications ?? anamnesis?.active_medications ?? []),
+        estilo_vida: JSON.stringify({
+          patron_alimentario: evalData?.patron_alimentario,
+          ejercicio_tipo: evalData?.ejercicio_tipo,
+          nivel_estres: evalData?.nivel_estres,
+          horas_sueno: evalData?.horas_sueno,
+          calidad_sueno: evalData?.calidad_sueno,
+        }),
+        laboratorios: JSON.stringify({
+          estradiol: evalData?.estradiol_valor,
+          progesterona: evalData?.progesterona_valor,
+          tsh: evalData?.tsh_valor,
+          vitamina_d: evalData?.vitamina_d_valor,
+        }),
+        historial_clinico: JSON.stringify(historialClinico ?? {}),
+      }
+      context = resolvePrompt(custom_prompt, vars)
+    } else {
+      context = `
 PACIENTE:
 - Sexo: ${patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
 - Fecha nacimiento: ${patient?.birth_date ?? "No especificada"}
@@ -29,26 +108,26 @@ HISTORIAL CLÍNICO:
 
 EVALUACIÓN CLÍNICA:
 - Síntomas vasomotores: ${JSON.stringify({
-  bochornos: evaluation?.bochornos,
-  sudores_nocturnos: evaluation?.sudores_nocturnos,
-  palpitaciones: evaluation?.palpitaciones
+  bochornos: evalData?.bochornos,
+  sudores_nocturnos: evalData?.sudores_nocturnos,
+  palpitaciones: evalData?.palpitaciones
 })}
 - Síntomas neurocognitivos: ${JSON.stringify({
-  niebla_mental: evaluation?.niebla_mental,
-  ansiedad: evaluation?.ansiedad,
-  irritabilidad: evaluation?.irritabilidad,
-  bajo_animo: evaluation?.bajo_animo,
-  insomnio: evaluation?.insomnio
+  niebla_mental: evalData?.niebla_mental,
+  ansiedad: evalData?.ansiedad,
+  irritabilidad: evalData?.irritabilidad,
+  bajo_animo: evalData?.bajo_animo,
+  insomnio: evalData?.insomnio
 })}
 - Síntomas metabólicos: ${JSON.stringify({
-  grasa_abdominal: evaluation?.grasa_abdominal,
-  dificultad_perder_peso: evaluation?.dificultad_perder_peso,
-  caida_cabello: evaluation?.caida_cabello
+  grasa_abdominal: evalData?.grasa_abdominal,
+  dificultad_perder_peso: evalData?.dificultad_perder_peso,
+  caida_cabello: evalData?.caida_cabello
 })}
-- Screening riesgos: cancer_mama=${evaluation?.riesgo_cancer_mama}, trombosis=${evaluation?.riesgo_trombosis}, cardiovascular=${evaluation?.riesgo_cardiovascular}, miomas=${evaluation?.riesgo_miomas}
-- Laboratorios: estradiol=${evaluation?.estradiol_valor ?? "ND"}, progesterona=${evaluation?.progesterona_valor ?? "ND"}, tsh=${evaluation?.tsh_valor ?? "ND"}, vitamina_d=${evaluation?.vitamina_d_valor ?? "ND"}
-- Estilo de vida: patron=${evaluation?.patron_alimentario}, ejercicio=${evaluation?.ejercicio_tipo}, estres=${evaluation?.nivel_estres}/10, sueno=${evaluation?.horas_sueno}h calidad=${evaluation?.calidad_sueno}/10
-`.trim()
+- Screening riesgos: cancer_mama=${evalData?.riesgo_cancer_mama}, trombosis=${evalData?.riesgo_trombosis}, cardiovascular=${evalData?.riesgo_cardiovascular}, miomas=${evalData?.riesgo_miomas}
+- Laboratorios: estradiol=${evalData?.estradiol_valor ?? "ND"}, progesterona=${evalData?.progesterona_valor ?? "ND"}, tsh=${evalData?.tsh_valor ?? "ND"}, vitamina_d=${evalData?.vitamina_d_valor ?? "ND"}
+- Estilo de vida: patron=${evalData?.patron_alimentario}, ejercicio=${evalData?.ejercicio_tipo}, estres=${evalData?.nivel_estres}/10, sueno=${evalData?.horas_sueno}h calidad=${evalData?.calidad_sueno}/10`.trim()
+    }
 
     const message = await client.messages.create({
       model: "claude-opus-4-5",
@@ -75,8 +154,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta, sin 
 
     const text = message.content[0].type === "text" ? message.content[0].text : ""
     const clean = text.replace(/```json|```/g, "").trim()
-    const parsed = JSON.parse(clean)
-    return NextResponse.json(parsed)
+    return NextResponse.json(JSON.parse(clean))
   } catch (e) {
     console.error("AI hormonal error:", e)
     return NextResponse.json({ error: "Error generando análisis" }, { status: 500 })

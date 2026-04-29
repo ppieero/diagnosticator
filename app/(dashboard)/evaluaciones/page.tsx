@@ -16,6 +16,8 @@ const FIELD_TYPE_ICONS: Record<string, string> = {
   textarea: "📝", select: "▾", multiselect: "☑", scale_0_10: "📊",
   body_map: "🫀", repeating_group: "↕", radio: "◎", switch: "⇌",
   postural_assessment: "⊞", palpation: "✋",
+  vasomotor: "🌡", symptom_scale: "📊", hormonal_meds: "💊", lab_upload: "🧪",
+  decimal: "0.0", number: "123", date: "📅", section_header: "—", info_text: "ℹ",
   text: "T", range_of_motion: "⟳",
 }
 

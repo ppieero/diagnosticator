@@ -91,6 +91,9 @@ export function FormEngine({
   async function runAISuggestion() {
     setAiSugLoading(true); setAiSugError(null)
     try {
+      const secDolor = template.sections.find(s => s.id === "s_dolor")
+      const customPrompt = (secDolor as Record<string, unknown>)?.ai_prompt as string | undefined
+
       const resp = await fetch("/api/ai-suggest-evaluation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -98,12 +101,10 @@ export function FormEngine({
           patient: { biological_sex: clinicalContext.patientSex, birth_date: clinicalContext.patientBirthDate },
           anamnesis: clinicalContext.anamnesisSnapshot ?? {},
           profile: clinicalContext.profile ?? {},
-          form_data: {
-            motivo: answers,
-            dolor: answers,
-          },
+          form_data: answers,
           evaluation_type: template.form_type,
           specialty: template.specialty,
+          custom_prompt: customPrompt,
         })
       })
       if (!resp.ok) throw new Error()
@@ -115,6 +116,9 @@ export function FormEngine({
   async function runAIPrediagnosis() {
     setAiDxLoading(true); setAiDxError(null)
     try {
+      const secConclusion = template.sections.find(s => s.id === "s_conclusion")
+      const customPrompt = (secConclusion as Record<string, unknown>)?.ai_prompt as string | undefined
+
       const resp = await fetch("/api/ai-prediagnostico", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,6 +128,7 @@ export function FormEngine({
           profile: clinicalContext.profile ?? {},
           evaluation: answers,
           specialty: template.specialty,
+          custom_prompt: customPrompt,
         })
       })
       if (!resp.ok) throw new Error()
@@ -135,6 +140,9 @@ export function FormEngine({
   async function runHormonalAI() {
     setAiHormonalLoading(true); setAiHormonalError(null)
     try {
+      const secIA = template.sections.find(s => s.id === "s_ia_hormonal")
+      const customPrompt = (secIA as Record<string, unknown>)?.ai_prompt as string | undefined
+
       const resp = await fetch("/api/ai-hormonal-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,7 +150,8 @@ export function FormEngine({
           patient: { biological_sex: clinicalContext.patientSex, birth_date: clinicalContext.patientBirthDate },
           anamnesis: clinicalContext.anamnesisSnapshot ?? {},
           evaluation: answers,
-          historialClinico: clinicalContext.profile ?? {}
+          historialClinico: clinicalContext.profile ?? {},
+          custom_prompt: customPrompt,
         })
       })
       if (!resp.ok) throw new Error()

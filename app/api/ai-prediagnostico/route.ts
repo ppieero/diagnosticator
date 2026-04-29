@@ -3,11 +3,48 @@ import Anthropic from "@anthropic-ai/sdk"
 
 const client = new Anthropic()
 
+function resolvePrompt(template: string, data: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] ?? `[${key}]`)
+}
+
+function calcAge(birthDate: string): string {
+  if (!birthDate) return "desconocida"
+  const diff = Date.now() - new Date(birthDate).getTime()
+  return String(Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)))
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { patient, anamnesis, profile, evaluation, specialty } = await req.json()
+    const { patient, anamnesis, profile, evaluation, specialty, custom_prompt } = await req.json()
 
-    const context = `
+    let context: string
+
+    if (custom_prompt && custom_prompt.trim()) {
+      const vars: Record<string, string> = {
+        sexo: patient?.biological_sex === "male" ? "Masculino" : "Femenino",
+        edad: calcAge(patient?.birth_date),
+        motivo_consulta: evaluation?.main_complaint ?? evaluation?.motivo ?? anamnesis?.main_complaint ?? "No especificado",
+        dolor_eva: String(evaluation?.pain_scale ?? "No especificado"),
+        tipo_dolor: Array.isArray(evaluation?.pain_type)
+          ? (evaluation.pain_type as string[]).join(", ")
+          : String(evaluation?.pain_type ?? "No especificado"),
+        postural: JSON.stringify({
+          anterior: evaluation?.postural_view_anterior,
+          lateral: evaluation?.postural_view_lateral,
+        }),
+        palpacion: JSON.stringify(evaluation?.palpation ?? {}),
+        articular: JSON.stringify(evaluation?.range_of_motion ?? {}),
+        muscular: JSON.stringify(evaluation?.muscle_strength ?? {}),
+        tests: JSON.stringify({
+          realizados: evaluation?.tests_performed,
+          resultados: evaluation?.tests_results,
+        }),
+        historial_clinico: JSON.stringify(anamnesis ?? {}),
+        anamnesis: JSON.stringify(anamnesis ?? {}),
+      }
+      context = resolvePrompt(custom_prompt, vars)
+    } else {
+      context = `
 PACIENTE:
 - Sexo: ${patient?.biological_sex === "male" ? "Masculino" : patient?.biological_sex === "female" ? "Femenino" : "No especificado"}
 - Fecha nacimiento: ${patient?.birth_date ?? "No especificada"}
@@ -37,8 +74,8 @@ EVALUACIÓN FISIOTERAPÉUTICA:
 - Diagnóstico funcional: ${evaluation?.functional_diagnosis ?? "No especificado"}
 - Pronóstico: ${evaluation?.prognosis ?? "No especificado"}
 
-ESPECIALIDAD: ${specialty ?? "fisioterapia"}
-`.trim()
+ESPECIALIDAD: ${specialty ?? "fisioterapia"}`.trim()
+    }
 
     const message = await client.messages.create({
       model: "claude-opus-4-5",
@@ -70,8 +107,7 @@ Reglas:
 
     const text = message.content[0].type === "text" ? message.content[0].text : ""
     const clean = text.replace(/```json|```/g, "").trim()
-    const parsed = JSON.parse(clean)
-    return NextResponse.json(parsed)
+    return NextResponse.json(JSON.parse(clean))
   } catch (e) {
     console.error("AI prediag error:", e)
     return NextResponse.json({ error: "Error generando pre-diagnóstico" }, { status: 500 })
