@@ -42,6 +42,7 @@ export async function getTemplates(): Promise<FormTemplate[]> {
   const { data, error } = await supabase
     .from("specialty_form_templates")
     .select("*, specialty:specialties(name, color)")
+    .eq("is_active", true)
     .order("name")
   if (error) throw error
   return (data ?? []) as unknown as FormTemplate[]
