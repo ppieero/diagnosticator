@@ -138,8 +138,8 @@ export function AnamnesisHormonal({ snapshot, setSnapshot, patient: _patient, on
                         ["premenopausia", "Premenopausia"],
                         ["perimenopausia_temprana", "Perimenopausia temprana"],
                         ["perimenopausia_tardia", "Perimenopausia tardía"],
-                        ["menopausia", "Menopausia"],
                         ["postmenopausia", "Postmenopausia"],
+                        ["trh", "TRH"],
                       ].map(([v, l]) => (
                         <button key={v} type="button" onClick={() => sg("etapa_menopausica", v)}
                           className={cn("px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all",

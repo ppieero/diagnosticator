@@ -126,7 +126,7 @@ export function LabUploadField({
             <p className="text-sm font-semibold text-gray-700">Subir laboratorio</p>
             <p className="text-xs text-gray-400 mt-1">PDF, JPG o PNG · Máx 10MB</p>
             <p className="text-xs text-blue-600 mt-2 font-medium">
-              ✨ Claude analizará automáticamente los valores
+              ✨ Diagnosticator analizará automáticamente los valores
             </p>
           </div>
           <input

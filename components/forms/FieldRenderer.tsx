@@ -2,6 +2,7 @@
 import type { FormFieldConfig, BodyMapMarker } from "@/types/domain"
 import { PosturalAssessmentField } from "./fields/PosturalAssessmentField"
 import { PalpationField } from "./fields/PalpationField"
+import { HormonalMedsField } from "./fields/HormonalMedsField"
 import { evaluateConditions, evaluateClinicalAlert } from "./form-utils"
 import { Scale0To10 } from "./fields/Scale0To10"
 import { RepeatingGroup } from "./fields/RepeatingGroup"
@@ -342,6 +343,14 @@ function FieldInput({ field, value, onChange, allAnswers, disabled }: FieldRende
     case "palpation":
       return (
         <PalpationField
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      )
+    case "hormonal_meds":
+      return (
+        <HormonalMedsField
           value={value}
           onChange={onChange}
           disabled={disabled}
