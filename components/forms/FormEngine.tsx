@@ -163,6 +163,9 @@ export function FormEngine({
   async function runAIHormonalAnalysis() {
     setAiHormonalLoading(true); setAiHormonalError(null)
     try {
+      const secIA = template.sections.find(s => s.id === "s_ia_hormonal" || s.id === "s_ia_sugerencia")
+      const customPrompt = (secIA as Record<string, unknown>)?.ai_prompt as string | undefined
+
       const resp = await fetch("/api/ai-hormonal-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,6 +173,7 @@ export function FormEngine({
           patient: { biological_sex: clinicalContext.patientSex, birth_date: clinicalContext.patientBirthDate },
           anamnesis: clinicalContext.anamnesisSnapshot ?? {},
           evaluation_data: answers,
+          custom_prompt: customPrompt,
         })
       })
       if (!resp.ok) throw new Error()
